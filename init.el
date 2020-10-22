@@ -389,6 +389,48 @@ Originally from protesilaos' dotemacs."
            (desktop-base-lock-name ".desktop.lock")
            (desktop-restore-eager 8)))
 
+(use-package project
+  :config
+  (let ((map  (make-sparse-keymap))
+        (keys '(("f" . project-find-file)
+                ("b" . project-switch-to-buffer)
+                ("d" . project-dired)
+                ("k" . project-kill-buffers)
+                ("p" . project-switch-project)
+                ("s" . project-shell)
+                ("t" . my/project-spawn-term)
+                ("e" . my/project-spawn-eshell)
+                ("g" . project-find-regexp)
+                ("c" . project-compile))))
+    (cl-loop for (key . func) in keys
+             do (define-key map (kbd key) func))
+    (define-key global-map (kbd "C-c p") map)
+
+    (defmacro with-directory (dir &rest body)
+      "Execute BODY with `default-directory' bound to DIR."
+      (declare (indent defun))
+      `(let ((default-directory ,dir))
+         ,@body))
+
+    ;; very very very similar to projectile-generate-process-name!
+    (defun my/generate-bufname (proc new)
+      (let* ((p     (substring (cdr (project-current)) 0 -1))
+             (pname (file-name-nondirectory p))
+             (name  (format "%s %s" proc pname)))
+        (if new
+            (generate-new-buffer-name name)
+          name)))
+
+    (defun my/project-spawn-term (arg)
+      (interactive "P")
+      (with-directory (cdr (project-current))
+        (ansi-term (getenv "SHELL") (my/generate-bufname "term" arg))))
+
+    (defun my/project-spawn-eshell (arg)
+      (interactive "P")
+      (with-directory (cdr (project-current))
+        (let ((eshell-buffer-name (my/project-spawn-term "eshell" arg)))
+          (eshell))))))
 (use-package transpose-frame
   :bind ("M-#" . my/hydra-window/body)
   :commands (transpose-frame flip-frame flop-frame
@@ -753,33 +795,34 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
                  (define-key elfeed-search-mode-map (kbd "p") (my/elfeed-search-show-entry-pre -1))
                  (define-key elfeed-search-mode-map (kbd "M-RET") (my/elfeed-search-show-entry-pre))))
 
-(use-package projectile
-  :bind-keymap (("C-c p" . projectile-command-map)
-                ("s-p"   . projectile-command-map))
-  :config
-  (setq projectile-completion-system 'default
-        projectile-enable-caching t)
+(comment
+ (use-package projectile
+   :bind-keymap (("C-c p" . projectile-command-map)
+                 ("s-p"   . projectile-command-map))
+   :config
+   (setq projectile-completion-system 'default
+         projectile-enable-caching nil)
 
-  (defun my/projectile-run-term (arg)
-    "Invoke `term' in hte project's root or switch to it if already exists.
+   (defun my/projectile-run-term (arg)
+     "Invoke `term' in hte project's root or switch to it if already exists.
 
 Use a prefix argument ARG to indicate the creation of a new process instead."
-    (interactive "P")
-    (let ((project (projectile-ensure-project (projectile-project-root)))
-          (buffer-name (projectile-generate-process-name "term" arg))
-          (cmd (or explicit-shell-file-name
-                   (getenv "ESHELL")
-                   (getenv "SHELL")
-                   "/bin/sh")))
-      (unless (get-buffer buffer-name)
-        (require 'term)
-        (projectile-with-default-dir project
-          (set-buffer (term-ansi-make-term buffer-name cmd))
-          (term-mode)
-          (term-char-mode)))
-      (switch-to-buffer buffer-name)))
+     (interactive "P")
+     (let ((project (projectile-ensure-project (projectile-project-root)))
+           (buffer-name (projectile-generate-process-name "term" arg))
+           (cmd (or explicit-shell-file-name
+                    (getenv "ESHELL")
+                    (getenv "SHELL")
+                    "/bin/sh")))
+       (unless (get-buffer buffer-name)
+         (require 'term)
+         (projectile-with-default-dir project
+                                      (set-buffer (term-ansi-make-term buffer-name cmd))
+                                      (term-mode)
+                                      (term-char-mode)))
+       (switch-to-buffer buffer-name)))
 
-  (define-key projectile-command-map (kbd "x t") #'my/projectile-run-term))
+   (define-key projectile-command-map (kbd "x t") #'my/projectile-run-term)))
 
 (comment
  (use-package company
@@ -1200,49 +1243,6 @@ Anyway, set forcefully `eldoc-documentation-function' to
     (setq eldoc-documentation-function #'cider-eldoc))
   (add-hook 'cider-mode-hook #'my/fix-cider-eldoc))
 
-(use-package project
-  :straight nil
-  :config
-  (let ((map  (make-sparse-keymap))
-        (keys '(("f" . project-find-file)
-                ("t" . my/project-spawn-term)
-                ("s" . my/project-spawn-eshell)
-                ("g" . project-find-regexp)
-                ("c" . project-compile))))
-    (cl-loop for (key . func) in keys
-             do (define-key map (kbd key) func))
-    ;; (define-key global-map (kbd "C-c p") map)
-
-    (defmacro with-directory (dir &rest body)
-      "Execute BODY with `default-directory' bound to DIR."
-      (declare (indent defun))
-      (let ((d (gensym))
-            (newdir dir))
-        `(let ((,d default-directory))
-           (setq default-directory ,newdir)
-           ,@body
-           (setq default-directory ,d))))
-
-    ;; very very very similar to projectile-generate-process-name!
-    (defun my/generate-bufname (proc new)
-      (let* ((p     (substring (cdr (project-current)) 0 -1))
-             (pname (file-name-nondirectory p))
-             (name  (format "%s %s" proc pname)))
-        (if new
-            (generate-new-buffer-name name)
-          name)))
-
-    (defun my/project-spawn-term (arg)
-      (interactive "P")
-      (with-directory (cdr (project-current))
-        (ansi-term (getenv "SHELL") (my/generate-bufname "term" arg))))
-
-    (defun my/project-spawn-eshell (arg)
-      (interactive "P")
-      (with-directory (cdr (project-current))
-        (let ((eshell-buffer-name (my/project-spawn-term "eshell" arg)))
-          (eshell))))))
-
 (use-package flymake
   :straight nil
   :hook (prog-mode . flymake-mode)
@@ -1261,11 +1261,6 @@ Anyway, set forcefully `eldoc-documentation-function' to
     ("q" nil :exit t)))
 
 (use-package eglot
-  ;; there's a problem between straight.el and eglot.  Seems that the
-  ;; correct version of project.el isn't picked up.  Dunno why, but
-  ;; with this it just werks™
-  :init (defun project-root (project)
-          (car (project-roots project)))
   :commands (eglot)
   :config (progn
             (define-key eglot-mode-map (kbd "<f1>") 'eglot-code-actions)
