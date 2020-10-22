@@ -435,6 +435,20 @@ Originally from protesilaos' dotemacs."
 (use-package speedbar
   :bind (("<f8>" . speedbar-get-focus)
          ("<S-<f8>" . speedbar)))
+
+(use-package winner
+  :straight nil
+  :config
+  (winner-mode 1)
+  (defhydra hydra-winner (winner-mode-map "C-c")
+    ("<left>" (progn (winner-undo)
+                     (setq this-command 'winner-undo)) "undo")
+    ("h" (progn (winner-undo)
+                (setq this-command 'winner-undo)) "undo")
+    ("<right>" winner-redo "redo")
+    ("l" winner-redo "redo")
+    ("q" nil :exit nil)))
+
 (use-package transpose-frame
   :bind ("M-#" . my/hydra-window/body)
   :commands (transpose-frame flip-frame flop-frame
