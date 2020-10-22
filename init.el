@@ -1182,7 +1182,8 @@ Use as a value for `completion-in-region-function'."
    :config (setq slime-company-completion 'fuzzy)))
 
 (use-package sly
-  :hook ((lisp-mode . prettify-symbols-mode))
+  :hook ((lisp-mode . prettify-symbols-mode)
+         (lisp-mode . sly-symbol-completion-mode))
   :custom (inferior-lisp-program "sbcl"))
 
 (use-package gerbil
