@@ -431,6 +431,10 @@ Originally from protesilaos' dotemacs."
       (with-directory (cdr (project-current))
         (let ((eshell-buffer-name (my/project-spawn-term "eshell" arg)))
           (eshell))))))
+
+(use-package speedbar
+  :bind (("<f8>" . speedbar-get-focus)
+         ("<S-<f8>" . speedbar)))
 (use-package transpose-frame
   :bind ("M-#" . my/hydra-window/body)
   :commands (transpose-frame flip-frame flop-frame
