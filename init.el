@@ -566,6 +566,8 @@ _?_ toggle help    ^ ^                _-_   split vert.
   (emms-all)
   (emms-default-players)
 
+  (add-to-list 'emms-player-base-format-list "opus")
+
   ;; use libtag to extract tracks info.
   ;;
   ;; XXX: this needs to be compiled from sources
@@ -574,6 +576,8 @@ _?_ toggle help    ^ ^                _-_   split vert.
   (require 'emms-info)
   (require 'emms-info-libtag)
   (setq emms-info-functions '(emms-info-libtag))
+  (setq emms-info-libtag-known-extensions
+        (regexp-opt '("opus" "mp3" "mp4" "m4a" "ogg" "flac" "spx" "wma")))
 
   ;; save on quit and recover on startup
   (require 'emms-history)
