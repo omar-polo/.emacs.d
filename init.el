@@ -58,7 +58,7 @@
 (add-hook 'emacs-lisp-mode-hook 'prettify-symbols-mode)
 (add-hook 'log-edit-mode-hook 'auto-fill-mode)
 
-(dolist (hook '(shell-script-mode-hook c-mode-hook c++-mode-hook))
+(dolist (hook '(sh-mode-hook shell-script-mode-hook c-mode-hook c++-mode-hook))
   (add-hook hook 'my/enable-tabs))
 
 (setq-default sh-basic-offset 8
