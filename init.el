@@ -899,6 +899,10 @@ Use as a value for `completion-in-region-function'."
           t))))
   (setq completion-in-region-function #'contrib/completing-read-in-region))
 
+(use-package orderless
+  :custom ((orderless-matching-styles '(orderless-literal))
+           (completion-styles '(orderless partial-completion))))
+
 (comment
  (use-package selectrum
    :bind (("C-M-y" . my/yank-pop))
