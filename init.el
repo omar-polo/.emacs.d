@@ -312,6 +312,19 @@ Originally from protesilaos' dotemacs."
 
 (straight-use-package 'use-package)
 
+(use-package emacs
+  :custom ((require-final-newline t)
+           (visible-bell nil)
+           (load-prefer-newer t)))
+(use-package uniquify
+  :straight nil
+  :custom ((uniquify-buffer-name-style 'forward)
+           (uniquify-strip-common-suffix t)))
+
+(use-package saveplace
+  :straight nil
+  :config (save-place-mode 1))
+
 (use-package desktop
   :hook ((after-init . desktop-read)
          (after-init . desktop-save-mode))
