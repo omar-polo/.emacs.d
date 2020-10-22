@@ -186,7 +186,10 @@
      `(js2-magic-paren ((,class (:underline t))))
      `(js2-private-function-call ((,class (:inherit base-faces))))
      `(js2-private-member ((,class (:inherit base-faces))))
-   ))
+
+     ;; sh-mode
+     `(sh-heredoc ((,class (:inherit base-faces :slant italic))))
+     ))
 
 ;;;###autoload
 (when (and (boundp 'custom-theme-load-path) load-file-name)
