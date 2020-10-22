@@ -852,103 +852,95 @@ Use a prefix argument ARG to indicate the creation of a new process instead."
               ("C-p" . company-select-previous))
   :commands (company-mode))
 
+(use-package icomplete-vertical
+  :demand t                             ; do not defer loading this
+  :bind (:map icomplete-minibuffer-map
+              ("<down>" . icomplete-forward-completions)
+              ("C-n" . icomplete-forward-completions)
+              ("<up>" . icomplete-backward-completions)
+              ("C-p" . icomplete-backward-completions)
+              ("C-v" . icomplete-vertical-toggle)
+              ("<tab>" . icomplete-force-complete)
+              ("<return>" . icomplete-force-complete-and-exit)
+              ("C-j" . exit-minibuffer)
+              ("<C-backspace>" . icomplete-fido-backward-updir))
+  :custom ((read-file-name-completion-ignore-case t)
+           (read-buffer-completion-ignore-case t)
+           (completion-ignore-case t)
+           (icomplete-hide-common-prefix nil)
+           (icomplete-show-matches-on-no-input t)
+           (enable-recursive-minibuffers t)
+           (icomplete-max-delay-chars 1)
+           (icomplete-compute-delay 0.4))
+  :config
+  (icomplete-mode)
+  (icomplete-vertical-mode)
+
+  ;; use icomplete also for when tabbing for completion.
+  (defun contrib/completing-read-in-region (start end collection &optional predicate)
+    "Prompt for completion of region in the minibuffer if non-unique.
+Use as a value for `completion-in-region-function'."
+    (if (and (minibufferp) (not (string= (minibuffer-prompt) "Eval: ")))
+        (completion--in-region start end collection predicate)
+      (let* ((initial (buffer-substring-no-properties start end))
+             (limit (car (completion-boundaries initial collection predicate "")))
+             (all (completion-all-completions initial collection predicate
+                                              (length initial)))
+             (completion (cond
+                          ((atom all) nil)
+                          ((and (consp all) (atom (cdr all)))
+                           (concat (substring initial 0 limit) (car all)))
+                          (t (completing-read
+                              "Completion: " collection predicate t initial)))))
+        (if (null completion)
+            (progn (message "No completion") nil)
+          (delete-region start end)
+          (insert completion)
+          t))))
+  (setq completion-in-region-function #'contrib/completing-read-in-region))
+
 (comment
- (use-package icomplete
-   :straight nil
-   :bind (:map icomplete-minibuffer-map
-               ("<tab>" . icomplete-force-complete)
-               ("<return>" . icomplete-force-complete-and-exit)
-               ("C-j" . exit-minibuffer)      ; force input unconditionally
-               ("C-s" . icomplete-forward-completions)
-               ("C-r" . icomplete-backward-completions)
-               ("C-n" . icomplete-forward-completions)
-               ("C-p" . icomplete-backward-completions)
-               ("<C-backspace>" . icomplete-fido-backward-updir))
-   :custom ((icomplete-show-matches-on-no-input t)
-            (icomplete-hide-common-prefix nil)
-            (icomplete-prospect-height 1))
-   :init (progn (message "before {fido,icomplete}-mode")
-                (fido-mode 1)
-                (icomplete-mode 1)))
+ (use-package selectrum
+   :bind (("C-M-y" . my/yank-pop))
+   :custom (enable-recursive-minibuffers t)
+   :config (progn
+             (selectrum-mode +1)
+             (defun my/yank-pop ()
+               "Offer a way to pick an element from the `kill-ring' using `completing-read'.  Adapted from yank-pop+ from selectrum wiki."
+               (interactive)
+               (let* ((old-last-command last-command)
+                      (text (completing-read
+                             "Yank: "
+                             (cl-remove-duplicates kill-ring :test #'string= :from-end t)
+                             nil t nil nil))
+                      (pos (cl-position text kill-ring :test #'string=))
+                      (n (+ pos (length kill-ring-yank-pointer))))
+                 (unless (string= text (current-kill n t))
+                   (error "Could not set up for `current-kill'"))
+                 (setq last-command old-last-command)
+                 (if (eq last-command 'yank)
+                     (yank-pop n)
+                   (insert-for-yank text))))))
 
- (use-package icomplete-vertical
-   :bind (:map icomplete-minibuffer-map
-               ("<down>" . icomplete-forward-completions)
-               ("C-n" . icomplete-forward-completions)
-               ("<up>" . icomplete-backward-completions)
-               ("C-p" . icomplete-backward-completions))
-   :config (icomplete-vertical-mode))
-
- (use-package orderless
-   :custom (completion-styles '(orderless))))
-
-(use-package selectrum
-  :bind (("C-M-y" . my/yank-pop))
-  :custom (enable-recursive-minibuffers t)
-  :config (progn
-            (selectrum-mode +1)
-            (defun my/yank-pop ()
-              "Offer a way to pick an element from the `kill-ring' using `completing-read'.  Adapted from yank-pop+ from selectrum wiki."
-              (interactive)
-              (let* ((old-last-command last-command)
-                     (text (completing-read
-                            "Yank: "
-                            (cl-remove-duplicates kill-ring :test #'string= :from-end t)
-                            nil t nil nil))
-                     (pos (cl-position text kill-ring :test #'string=))
-                     (n (+ pos (length kill-ring-yank-pointer))))
-                (unless (string= text (current-kill n t))
-                  (error "Could not set up for `current-kill'"))
-                (setq last-command old-last-command)
-                (if (eq last-command 'yank)
-                    (yank-pop n)
-                  (insert-for-yank text))))))
-
-(use-package selectrum-prescient
-  :config (progn
-            (selectrum-prescient-mode +1)
-            (prescient-persist-mode +1)))
+ (use-package selectrum-prescient
+   :config (progn
+             (selectrum-prescient-mode +1)
+             (prescient-persist-mode +1))))
 
 (use-package embark
   :straight (:type git :host github :repo "oantolin/embark")
   :bind (:map minibuffer-local-completion-map
-         ("M-t" . embark-act)
-         ("M-T" . embark-act-noexit)
-         :map completion-list-mode-map
-         ("M-t" . embark-act)
-         :map minibuffer-inactive-mode-map
-         ("M-t" . embark-act)
-         :map selectrum-minibuffer-map
-         ("M-t" . embark-act)
-         ("M-T" . embark-act-noexit))
-  :config
-  (defun my/selectrum-get-target ()
-    (selectrum--get-full
-     (selectrum--get-candidate
-      selectrum--current-candidate-index)))
-  (cl-pushnew 'my/selectrum-get-target embark-target-finders)
-
-  (defun my/selectrum-refresh ()
-    "Refresh the completion list of selectrum."
-    (setq selectrum--previous-input-string nil))
-  (add-hook 'embark-pre-action-hook #'my/selectrum-refresh)
-
-  (add-hook 'embark-post-action-hook #'embark-occur--update-linked)
-
-  (define-key embark-general-map (kbd "C-o") #'embark-occur)
-
-  (comment
-   (defun my/embark-open-file (&optional arg)
-     "Open the file at embar target in the current buffer.
-
-If ARG is not nil, open in a new buffer"
-     (interactive "p")
-     (let ((f (substring-no-properties (embark-target))))
-       (if arg
-           (find-file-other-window f)
-         (find-file f))))
-   (define-key embark-general-map (kbd "o") #'my/embark-open-file))
-  )
+              ("M-t" . embark-act-noexit)
+              ("M-T" . embark-act)
+              ("M-S-t" . embark-act)
+              :map completion-list-mode-map
+              ("M-t" . embark-act-noexit)
+              ("M-T" . embark-act)
+              ("M-S-t" . embark-act)
+              :map minibuffer-inactive-mode-map
+              ("M-t" . embark-act-noexit)
+              ("M-T" . embark-act)
+              ("M-S-t" . embark-act)))
 
 (use-package hippie-exp
   :straight nil
