@@ -316,6 +316,53 @@ Originally from protesilaos' dotemacs."
   :custom ((require-final-newline t)
            (visible-bell nil)
            (load-prefer-newer t)))
+
+(use-package hydra
+  :config
+
+  (defhydra hydra-toggle (global-map "C-c C-v"
+                                     :columns 4)
+    "toggle"
+    ("a" abbrev-mode "abbrev")
+    ("d" toggle-debug-on-error "debug")
+    ("f" auto-fill-mode "fill")
+    ("t" toggle-truncate-lines "truncate")
+    ("v" visual-line-mode "visual")
+    ("w" whitespace-mode "whitespace")
+    ("q" nil "quit")
+    ("h" (hydra-set-property 'hydra-toggle :verbosity 1) nil))
+
+  ;; I find counter-intuitive the keybindings for left/right
+  ;; scrolling.  I mean, C-x > is like "going to the right" and C-x <
+  ;; is like "going to the left", but the default keys are the exact
+  ;; opposite, so let's swap them.  While there, also make a nice
+  ;; hydra!
+  (defhydra hydra-hscroll (global-map "C-x" :hint nil)
+    (">" scroll-left)
+    ("<" scroll-right))
+
+  (defhydra hydra-windowsize (global-map "C-x")
+    ("{" shrink-window-horizontally)
+    ("}" enlarge-window-horizontally))
+
+  (defhydra hydra-pages (global-map "C-x" :hint nil)
+    ("[" backward-page)
+    ("]" forward-page)
+    ("RET" nil :exit t)
+    ("q" nil :exit t))
+
+  (defhydra hydra-grep-like (global-map "M-g")
+    ("n" next-error "next")
+    ("p" previous-error "prev")
+    ("RET" nil :exit t)
+    ("q" nil :exit t))
+
+  (defhydra hydra-other-window (global-map "C-x")
+    ("o" other-window "next window")
+    ("O" (other-window -1) "previous window"))
+  (hydra-set-property 'hydra-other-window :verbosity 0)
+
+  nil)
 (use-package uniquify
   :straight nil
   :custom ((uniquify-buffer-name-style 'forward)
@@ -333,9 +380,70 @@ Originally from protesilaos' dotemacs."
            (desktop-restore-eager 8)))
 
 (use-package transpose-frame
+  :bind ("M-#" . my/hydra-window/body)
   :commands (transpose-frame flip-frame flop-frame
                              rotate-frame rotate-frame-clockwise
-                             rotate-frame-anti-anticlockwise))
+                             rotate-frame-anti-anticlockwise)
+  :config
+  (defhydra hydra-window (:hint nil)
+    "
+^File/Buffer^      ^Movements^        ^Misc^              ^Transpose^
+^^^^^^^^------------------------------------------------------------------------------
+_b_ switch buffer  ^ ^ hjkl           _0_   delete        _t_     transpose frame
+_f_ find file      _o_ other window   _1_   delete other  _M-f_   flip frame
+_s_ save conf      _O_ OTHER window   _2_   split below   _M-C-f_ flop frame
+_r_ reload conf    ^ ^                _3_   split right   _M-s_   rotate frame
+^ ^                ^ ^                _SPC_ balance       _M-r_   rotate clockw.
+^^^^-------------------------------   _v_   split horiz.  _M-C-r_ rotate anti clockw.
+_?_ toggle help    ^ ^                _-_   split vert.
+^ ^                ^ ^                _C-l_ recenter line
+"
+    ("?" (hydra-set-property 'hydra-window :verbosity
+                             (if (= (hydra-get-property 'hydra-window :verbosity) 1)
+                                 0 1)))
+
+    ("b" switch-to-buffer)
+    ("f" (call-interactively #'find-file))
+
+    ("s" window-configuration-to-register)
+    ("r" jump-to-register)
+
+    ("k" windmove-up)
+    ("j" windmove-down)
+    ("h" windmove-left)
+    ("l" windmove-right)
+
+    ("o" (other-window 1))
+    ("O" (other-window -1))
+
+    ("C-l" recenter-top-bottom)
+
+    ("0" delete-window)
+    ("1" delete-other-windows)
+    ("2" split-window-below)
+    ("3" split-window-right)
+
+    ;; v is like a |, no?
+    ("v" split-window-horizontally)
+    ("-" split-window-vertically)
+
+    ("SPC" balance-windows)
+
+    ("t" transpose-frame)
+    ("M-f" flip-frame)
+    ("M-C-f" flop-frame)
+    ("M-s" rotate-frame)
+    ("M-r" rotate-frame-clockwise)
+    ("M-C-r" rotate-frame-anti-anticlockwise)
+
+    ("q" nil :exit nil)
+    ("RET" nil :exit nil)
+    ("C-g" nil :exit nil))
+
+  (defun my/hydra-window/body ()
+    (interactive)
+    (hydra-set-property 'hydra-window :verbosity 0)
+    (hydra-window/body)))
 
 (use-package hideshow
   :straight nil
@@ -378,6 +486,7 @@ Originally from protesilaos' dotemacs."
 
 (use-package emms
   :commands (emms)
+  :bind ("C-z e" . hydra-emms/body)
   :config
   (setq emms-source-file-default-directory "~/music/"
         emms-mode-line-format "「%s」"
@@ -402,7 +511,97 @@ Originally from protesilaos' dotemacs."
 
   ;; use my backend for sndioctl
   (require 'emms-volume-sndioctl)
-  (setq-default emms-volume-change-function 'emms-volume-sndioctl-change))
+  (setq-default emms-volume-change-function 'emms-volume-sndioctl-change)
+
+  (defun my/tick-symbol (x)
+    "Return a tick if X is true-ish."
+    (if x "x" " "))
+
+  (defun my/emms-player-status ()
+    "Return the state of the EMMS player: `not-active', `playing', `paused' or `dunno'.
+
+Modeled after `emms-player-pause'."
+    (cond ((not emms-player-playing-p)
+           ;; here we should return 'not-active.  The fact is that
+           ;; when i change song, there is a short amount of time
+           ;; where we are ``not active'', and the hydra is rendered
+           ;; always during that short amount of time.  So we cheat a
+           ;; little.
+           'playing)
+
+          (emms-player-paused-p
+           (let ((resume (emms-player-get emms-player-playing-p 'resume))
+                 (pause (emms-player-get emms-player-playing-p 'pause)))
+             (cond (resume 'paused)
+                   (pause  'playing)
+                   (t      'dunno))))
+          (t (let ((pause (emms-player-get emms-player-playing-p 'pause)))
+               (if pause 'playing 'dunno)))))
+
+  (defun my/emms-toggle-time-display ()
+    "Toggle the display of time information in the modeline"
+    (interactive "")
+    (if emms-playing-time-display-p
+        (emms-playing-time-disable-display)
+      (emms-playing-time-enable-display)))
+
+  (defun my/emms-select-song ()
+    "Select and play a song from the current EMMS playlist."
+    (interactive)
+    (with-current-emms-playlist
+      (emms-playlist-mode-center-current)
+      (let* ((current-line-number (line-number-at-pos))
+             (lines (cl-loop
+                     with min-line-number = (line-number-at-pos (point-min))
+                     with buffer-text-lines = (split-string (buffer-string) "\n")
+                     with lines = nil
+                     for l in buffer-text-lines
+                     for n = min-line-number then (1+ n)
+                     do (push (cons l n)
+                              lines)
+                     finally return (nreverse lines)))
+             (selected-line (completing-read "Song: " lines)))
+        (when selected-line
+          (let ((line (cdr (assoc selected-line lines))))
+            (goto-line line)
+            (emms-playlist-mode-play-smart)
+            (emms-playlist-mode-center-current))))))
+
+  (defhydra hydra-emms (:hint nil)
+    "
+%(my/emms-player-status) %(emms-track-description (emms-playlist-current-selected-track))
+
+^Volume^     ^Controls^       ^Playback^              ^Misc^
+^^^^^^^^----------------------------------------------------------------
+_+_: inc     _n_: next        _r_: repeat one [% s(my/tick-symbol emms-repeat-track)]     _t_oggle modeline
+_-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-playlist)]     _T_oggle only time
+^ ^          _<_: seek bw     _#_: shuffle            _s_elect
+^ ^          _>_: seek fw     _%_: sort               _g_oto EMMS buffer
+^ ^        _SPC_: play/pause
+^ ^        _DEL_: restart
+  "
+    ("+" emms-volume-raise)
+    ("-" emms-volume-lower)
+    ("n" emms-next)
+    ("p" emms-previous)
+    ("<" emms-seek-backward)
+    (">" emms-seek-forward)
+    ("SPC" emms-pause)
+    ("DEL" (emms-player-seek-to 0))
+    ("<backspace>" (emms-player-seek-to 0))
+    ("r" emms-toggle-repeat-track)
+    ("R" emms-toggle-repeat-playlist)
+    ("#" emms-shuffle)
+    ("%" emms-sort)
+    ("t" (progn (my/emms-toggle-time-display)
+                (emms-mode-line-toggle)))
+    ("T" my/emms-toggle-time-display)
+    ("s" my/emms-select-song)
+    ("g" (progn (emms)
+                (with-current-emms-playlist
+                  (emms-playlist-mode-center-current))))
+
+    ("q" nil :exit t)))
 
 (use-package elpher
   :commands (elpher elpher-go elpher-jump))
@@ -739,9 +938,15 @@ If ARG is not nil, open in a new buffer"
              avy-goto-char-2
              avy-goto-word-1
              avy-goto-line)
-  ;; there's an hydra down there with bindings.
   :bind (:map isearch-mode-map
-         ("C-'" . avy-isearch)))
+              ("C-'" . avy-isearch))
+  :config
+  (defhydra hydra-avy (global-map "M-g")
+    "avy goto"
+    ("c" avy-goto-char "char")
+    ("C" avy-goto-char-2 "char 2")
+    ("w" avy-goto-word-1 "word")
+    ("f" avy-goto-line)))
 
 (use-package smartparens
   :commands (turn-on-smartparens-strict-mode)
@@ -756,37 +961,97 @@ If ARG is not nil, open in a new buffer"
          ("C-{" . sp-backward-barf-sexp)
          ("C-}" . sp-backward-slurp-sexp)
          ("C-k" . sp-kill-hybrid-sexp))
- :hook ((prog-mode . turn-on-smartparens-strict-mode)
-        (cider-repl-mode . turn-on-smartparens-strict-mode)
-        (LaTeX-mode . turn-on-smartparens-strict-mode))
- :config (progn (require 'smartparens-config)
-                ;; (show-smartparens-global-mode t)
+  :hook ((prog-mode . turn-on-smartparens-strict-mode)
+         (cider-repl-mode . turn-on-smartparens-strict-mode)
+         (LaTeX-mode . turn-on-smartparens-strict-mode))
+  :config (progn (require 'smartparens-config)
+                 ;; (show-smartparens-global-mode t)
 
-                (defun my/newline-indent (&rest _ignored)
-                  (split-line)
-                  (indent-for-tab-command))
+                 (defun my/newline-indent (&rest _ignored)
+                   (split-line)
+                   (indent-for-tab-command))
 
-                (let ((c-like '(c++mode
-                                c-mode
-                                css-mode
-                                go-mode
-                                java-mode
-                                js-jsx-mode
-                                js2-jsx-mod
-                                js2-mode
-                                json-mode
-                                python-mode
-                                web-mode)))
-                  (dolist (x `(("{" . ,c-like)
-                               ("[" . ,c-like)
-                               ("(" . (sql-mode ,@c-like))))
-                    (dolist (mode (cdr x))
-                      (sp-local-pair mode (car x) nil :post-handlers
-                                     '((my/newline-indent "RET")
-                                       (my/newline-indent "<return>"))))))
-                ;; it does not work.
-                (sp-local-pair 'gerbil-mode "'" nil :actions :rem)
-                (sp-local-pair 'gerbil-mode "`" nil :actions :rem)))
+                 (let ((c-like '(c++mode
+                                 c-mode
+                                 css-mode
+                                 go-mode
+                                 java-mode
+                                 js-jsx-mode
+                                 js2-jsx-mod
+                                 js2-mode
+                                 json-mode
+                                 python-mode
+                                 web-mode)))
+                   (dolist (x `(("{" . ,c-like)
+                                ("[" . ,c-like)
+                                ("(" . (sql-mode ,@c-like))))
+                     (dolist (mode (cdr x))
+                       (sp-local-pair mode (car x) nil :post-handlers
+                                      '((my/newline-indent "RET")
+                                        (my/newline-indent "<return>"))))))
+                 ;; it does not work.
+                 (sp-local-pair 'gerbil-mode "'" nil :actions :rem)
+                 (sp-local-pair 'gerbil-mode "`" nil :actions :rem)
+
+                 (defhydra hydra-sp (:hint nil)
+                   "
+ Moving^^^^                       Slurp & Barf^^   Wrapping^^            Sexp juggling^^^^               Destructive
+------------------------------------------------------------------------------------------------------------------------
+ [_a_] beginning  [_n_] down      [_h_] bw slurp   [_R_]   rewrap        [_S_] split   [_t_] transpose   [_c_] change inner  [_w_] copy
+ [_e_] end        [_N_] bw down   [_H_] bw barf    [_u_]   unwrap        [_s_] splice  [_A_] absorb      [_C_] change outer
+ [_f_] forward    [_p_] up        [_l_] slurp      [_U_]   bw unwrap     [_r_] raise   [_E_] emit        [_k_] kill          [_g_] quit
+ [_b_] backward   [_P_] bw up     [_L_] barf       [_(__{__[_] wrap (){}[]   [_j_] join    [_o_] convolute   [_K_] bw kill       [_q_] quit"
+                   ("?" (hydra-set-property 'hydra-sp :verbosity 1))
+
+                   ;; moving
+                   ("a" sp-beginning-of-sexp)
+                   ("e" sp-end-of-sexp)
+                   ("f" sp-forward-sexp)
+                   ("b" sp-backward-sexp)
+                   ("n" sp-down-sexp)
+                   ("N" sp-backward-down-sexp)
+                   ("p" sp-up-sexp)
+                   ("P" sp-backward-up-sexp)
+
+                   ;; slurping & barfing
+                   ("h" sp-backward-slurp-sexp)
+                   ("H" sp-backward-barf-sexp)
+                   ("l" sp-forward-slurp-sexp)
+                   ("L" sp-forward-barf-sexp)
+
+                   ;; wrapping
+                   ("R" sp-rewrap-sexp)
+                   ("u" sp-unwrap-sexp)
+                   ("U" sp-backward-unwrap-sexp)
+                   ("(" sp-wrap-round)
+                   ("[" sp-wrap-square)
+                   ("{" sp-wrap-curly)
+
+                   ;; sexp juggling
+                   ("S" sp-split-sexp)
+                   ("s" sp-splice-sexp)
+                   ("r" sp-raise-sexp)
+                   ("j" sp-join-sexp)
+                   ("t" sp-transpose-sexp)
+                   ("A" sp-absorb-sexp)
+                   ("E" sp-emit-sexp)
+                   ("o" sp-convolute-sexp)
+
+                   ;; destructive editing
+                   ("c" sp-change-inner :exit t)
+                   ("C" sp-change-enclosing :exit t)
+                   ("k" sp-kill-sexp)
+                   ("K" sp-backward-kill-sexp)
+                   ("w" sp-copy-sexp)
+
+                   ("q" nil)
+                   ("g" nil))
+
+                 (define-key global-map (kbd "s-c")
+                   (lambda ()
+                     (interactive)
+                     (hydra-set-property 'hydra-sp :verbosity 0)
+                     (hydra-sp/body)))))
 
 (use-package cc-mode
   :straight nil
@@ -977,7 +1242,13 @@ Anyway, set forcefully `eldoc-documentation-function' to
            (flymake-no-changes-timeout nil)
            (flymake-start-on-save-buffer t)
            (flymake-proc-compilation-prevents-syntax-check t)
-           (flymake-wrap-around nil)))
+           (flymake-wrap-around nil))
+  :config
+  (defhydra hydra-flymake (flymake-mode-map "C-c !")
+    ("n" flymake-goto-next-error)
+    ("p" flymake-goto-prev-error)
+    ("RET" nil :exit t)
+    ("q" nil :exit t)))
 
 (use-package eglot
   ;; there's a problem between straight.el and eglot.  Seems that the
@@ -1050,285 +1321,6 @@ Anyway, set forcefully `eldoc-documentation-function' to
     :hook (css-mode . rainbow-mode))
 
 
-
-;; I'm keeping the hydra at the end so I can freely use any function
-;; from any package
-(use-package hydra
-  :config
-  (defhydra hydra-sp (:hint nil)
-    "
- Moving^^^^                       Slurp & Barf^^   Wrapping^^            Sexp juggling^^^^               Destructive
-------------------------------------------------------------------------------------------------------------------------
- [_a_] beginning  [_n_] down      [_h_] bw slurp   [_R_]   rewrap        [_S_] split   [_t_] transpose   [_c_] change inner  [_w_] copy
- [_e_] end        [_N_] bw down   [_H_] bw barf    [_u_]   unwrap        [_s_] splice  [_A_] absorb      [_C_] change outer
- [_f_] forward    [_p_] up        [_l_] slurp      [_U_]   bw unwrap     [_r_] raise   [_E_] emit        [_k_] kill          [_g_] quit
- [_b_] backward   [_P_] bw up     [_L_] barf       [_(__{__[_] wrap (){}[]   [_j_] join    [_o_] convolute   [_K_] bw kill       [_q_] quit"
-    ("?" (hydra-set-property 'hydra-sp :verbosity 1))
-
-    ;; moving
-    ("a" sp-beginning-of-sexp)
-    ("e" sp-end-of-sexp)
-    ("f" sp-forward-sexp)
-    ("b" sp-backward-sexp)
-    ("n" sp-down-sexp)
-    ("N" sp-backward-down-sexp)
-    ("p" sp-up-sexp)
-    ("P" sp-backward-up-sexp)
-
-    ;; slurping & barfing
-    ("h" sp-backward-slurp-sexp)
-    ("H" sp-backward-barf-sexp)
-    ("l" sp-forward-slurp-sexp)
-    ("L" sp-forward-barf-sexp)
-
-    ;; wrapping
-    ("R" sp-rewrap-sexp)
-    ("u" sp-unwrap-sexp)
-    ("U" sp-backward-unwrap-sexp)
-    ("(" sp-wrap-round)
-    ("[" sp-wrap-square)
-    ("{" sp-wrap-curly)
-
-    ;; sexp juggling
-    ("S" sp-split-sexp)
-    ("s" sp-splice-sexp)
-    ("r" sp-raise-sexp)
-    ("j" sp-join-sexp)
-    ("t" sp-transpose-sexp)
-    ("A" sp-absorb-sexp)
-    ("E" sp-emit-sexp)
-    ("o" sp-convolute-sexp)
-
-    ;; destructive editing
-    ("c" sp-change-inner :exit t)
-    ("C" sp-change-enclosing :exit t)
-    ("k" sp-kill-sexp)
-    ("K" sp-backward-kill-sexp)
-    ("w" sp-copy-sexp)
-
-    ("q" nil)
-    ("g" nil))
-
-  (define-key global-map (kbd "s-c")
-    (lambda ()
-      (interactive)
-      (hydra-set-property 'hydra-sp :verbosity 0)
-      (hydra-sp/body)))
-
-  (defhydra hydra-toggle (global-map "C-c C-v"
-                                     :columns 4)
-    "toggle"
-    ("a" abbrev-mode "abbrev")
-    ("d" toggle-debug-on-error "debug")
-    ("f" auto-fill-mode "fill")
-    ("t" toggle-truncate-lines "truncate")
-    ("v" visual-line-mode "visual")
-    ("w" whitespace-mode "whitespace")
-    ("q" nil "quit")
-    ("h" (hydra-set-property 'hydra-toggle :verbosity 1) nil))
-
-  ;; I find counter-intuitive the keybindings for left/right
-  ;; scrolling.  I mean, C-x > is like "going to the right" and C-x <
-  ;; is like "going to the left", but the default keys are the exact
-  ;; opposite, so let's swap them.  While there, also make a nice
-  ;; hydra!
-  (defhydra hydra-hscroll (global-map "C-x" :hint nil)
-    (">" scroll-left)
-    ("<" scroll-right))
-
-  (defhydra hydra-windowsize (global-map "C-x")
-    ("{" shrink-window-horizontally)
-    ("}" enlarge-window-horizontally))
-
-  (defhydra hydra-pages (global-map "C-x" :hint nil)
-    ("[" backward-page)
-    ("]" forward-page)
-    ("RET" nil :exit t)
-    ("q" nil :exit t))
-
-  (defhydra hydra-grep-like (global-map "M-g")
-    ("n" next-error "next")
-    ("p" previous-error "prev")
-    ("RET" nil :exit t)
-    ("q" nil :exit t))
-
-  (with-eval-after-load 'flymake
-    (defhydra hydra-flymake (flymake-mode-map "C-c !")
-      ("n" flymake-goto-next-error)
-      ("p" flymake-goto-prev-error)
-      ("RET" nil :exit t)
-      ("q" nil :exit t)))
-
-  (defhydra hydra-avy (global-map "M-g")
-    "avy goto"
-    ("c" avy-goto-char "char")
-    ("C" avy-goto-char-2 "char 2")
-    ("w" avy-goto-word-1 "word")
-    ("f" avy-goto-line))
-
-  (defun my/tick-symbol (x)
-    "Return a tick if X is true-ish."
-    (if x "x" " "))
-
-  (defun my/emms-player-status ()
-    "Return the state of the EMMS player: `not-active', `playing', `paused' or `dunno'.
-
-Modeled after `emms-player-pause'."
-    (cond ((not emms-player-playing-p)
-           ;; here we should return 'not-active.  The fact is that
-           ;; when i change song, there is a short amount of time
-           ;; where we are ``not active'', and the hydra is rendered
-           ;; always during that short amount of time.  So we cheat a
-           ;; little.
-           'playing)
-
-          (emms-player-paused-p
-           (let ((resume (emms-player-get emms-player-playing-p 'resume))
-                 (pause (emms-player-get emms-player-playing-p 'pause)))
-             (cond (resume 'paused)
-                   (pause  'playing)
-                   (t      'dunno))))
-          (t (let ((pause (emms-player-get emms-player-playing-p 'pause)))
-               (if pause 'playing 'dunno)))))
-
-  (defun my/emms-toggle-time-display ()
-    "Toggle the display of time information in the modeline"
-    (interactive "")
-    (if emms-playing-time-display-p
-        (emms-playing-time-disable-display)
-      (emms-playing-time-enable-display)))
-
-  (defun my/selectrum-emms ()
-    "Select and play a song from the current EMMS playlist."
-    (interactive)
-    (with-current-emms-playlist
-      (emms-playlist-mode-center-current)
-      (let* ((selectrum-should-sort-p nil)
-             (current-line-number (line-number-at-pos (point)))
-             (lines (cl-loop
-                     with min-line-number = (line-number-at-pos (point-min))
-                     with buffer-text-lines = (split-string (buffer-string) "\n")
-                     with lines = nil
-                     for l in buffer-text-lines
-                     for n = min-line-number then (1+ n)
-                     do (push (propertize l' line-num n)
-                              lines)
-                     finally return (nreverse lines)))
-             (selected-line (selectrum-read "Song: " lines
-                                            :default-candidate (nth (1- current-line-number) lines)
-                                            :require-match t
-                                            :no-move-default-candidate t)))
-        (when selected-line
-          (let ((line (get-text-property 0 'line-num selected-line)))
-            (goto-line line)
-            (emms-playlist-mode-play-smart)
-            (emms-playlist-mode-center-current))))))
-
-  (defhydra hydra-emms (:hint nil)
-    "
-%(my/emms-player-status) %(emms-track-description (emms-playlist-current-selected-track))
-
-^Volume^     ^Controls^       ^Playback^              ^Misc^
-^^^^^^^^----------------------------------------------------------------
-_+_: inc     _n_: next        _r_: repeat one [% s(my/tick-symbol emms-repeat-track)]     _t_oggle modeline
-_-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-playlist)]     _T_oggle only time
-^ ^          _<_: seek bw     _#_: shuffle            _s_elect
-^ ^          _>_: seek fw     _%_: sort               _g_oto EMMS buffer
-^ ^        _SPC_: play/pause
-^ ^        _DEL_: restart
-  "
-    ("+" emms-volume-raise)
-    ("-" emms-volume-lower)
-    ("n" emms-next)
-    ("p" emms-previous)
-    ("<" emms-seek-backward)
-    (">" emms-seek-forward)
-    ("SPC" emms-pause)
-    ("DEL" (emms-player-seek-to 0))
-    ("<backspace>" (emms-player-seek-to 0))
-    ("r" emms-toggle-repeat-track)
-    ("R" emms-toggle-repeat-playlist)
-    ("#" emms-shuffle)
-    ("%" emms-sort)
-    ("t" (progn (my/emms-toggle-time-display)
-                (emms-mode-line-toggle)))
-    ("T" my/emms-toggle-time-display)
-    ("s" my/selectrum-emms)
-    ("g" (progn (emms)
-                (with-current-emms-playlist
-                  (emms-playlist-mode-center-current))))
-
-    ("q" nil :exit t))
-
-  (define-key global-map (kbd "C-z e") 'hydra-emms/body)
-
-  (defhydra hydra-window (:hint nil)
-    "
-^File/Buffer^      ^Movements^        ^Misc^              ^Transpose^
-^^^^^^^^------------------------------------------------------------------------------
-_b_ switch buffer  ^ ^ hjkl           _0_   delete        _t_     transpose frame
-_f_ find file      _o_ other window   _1_   delete other  _M-f_   flip frame
-_s_ save conf      _O_ OTHER window   _2_   split below   _M-C-f_ flop frame
-_r_ reload conf    ^ ^                _3_   split right   _M-s_   rotate frame
-^ ^                ^ ^                _SPC_ balance       _M-r_   rotate clockw.
-^^^^-------------------------------   _v_   split horiz.  _M-C-r_ rotate anti clockw.
-_?_ toggle help    ^ ^                _-_   split vert.
-^ ^                ^ ^                _C-l_ recenter line
-"
-    ("?" (hydra-set-property 'hydra-window :verbosity 1))
-
-    ("b" switch-to-buffer)
-    ("f" (if (projectile-project-p)
-             (projectile-find-file)
-           (call-interactively #'find-file)))
-
-    ("s" window-configuration-to-register)
-    ("r" jump-to-register)
-
-    ("k" windmove-up)
-    ("j" windmove-down)
-    ("h" windmove-left)
-    ("l" windmove-right)
-
-    ("o" (other-window 1))
-    ("O" (other-window -1))
-
-    ("C-l" recenter-top-bottom)
-
-    ("0" delete-window)
-    ("1" delete-other-windows)
-    ("2" split-window-below)
-    ("3" split-window-right)
-
-    ;; v is like a |, no?
-    ("v" split-window-horizontally)
-    ("-" split-window-vertically)
-
-    ("SPC" balance-windows)
-
-    ("t" transpose-frame)
-    ("M-f" flip-frame)
-    ("M-C-f" flop-frame)
-    ("M-s" rotate-frame)
-    ("M-r" rotate-frame-clockwise)
-    ("M-C-r" rotate-frame-anti-anticlockwise)
-
-    ("q" nil :exit nil)
-    ("RET" nil :exit nil)
-    ("C-g" nil :exit nil))
-
-  (define-key global-map (kbd "C-z u")
-    (lambda ()
-      (interactive)
-      (hydra-set-property 'hydra-window :verbosity 0)
-      (hydra-window/body)))
-
-  (defhydra hydra-other-window (global-map "C-x")
-    ("o" other-window "next window")
-    ("O" (other-window -1) "previous window"))
-  (hydra-set-property 'hydra-other-window :verbosity 0)
-
-  nil)
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
