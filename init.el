@@ -250,24 +250,6 @@ Taken from endless parentheses."
         (t (narrow-to-defun))))
 (define-key global-map (kbd "C-c w") 'my/narrow-or-widen-dwim)
 
-;; setup for packages
-(setq straight-use-package-by-default t)
-
-(defvar bootstrap-version)
-(let ((bootstrap-file
-       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
-      (bootstrap-version 5))
-  (unless (file-exists-p bootstrap-file)
-    (with-current-buffer
-        (url-retrieve-synchronously
-         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
-         'silent 'inhibit-cookies)
-      (goto-char (point-max))
-      (eval-print-last-sexp)))
-  (load bootstrap-file nil 'nomessage))
-
-;; (add-to-list 'straight-built-in-pseudo-packages 'package)
-
 (defmacro my/deftranspose (name scope &optional doc key)
   "Macro to produce transposition functions.
 NAME is the function's symbol.  SCOPE is the text object to
@@ -311,6 +293,22 @@ Originally from protesilaos' dotemacs."
 (my/deftranspose my/transpose-words "words"
   "Transpose words or swap over active region."
   "M-t")
+
+;; setup for packages
+(setq straight-use-package-by-default t)
+
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 5))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
 
 (straight-use-package 'use-package)
 
