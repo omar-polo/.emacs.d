@@ -739,15 +739,15 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
 (use-package telega
   :config (progn
             (add-hook 'telega-root-mode-hook 'telega-notifications-mode)
-            (comment
-             (add-hook 'telega-chat-mode-hook
-                       (lambda ()
-                         (set (make-local-variable 'company-backends)
-                              (append '(telega-company-emoji
-                                        telega-company-username
-                                        telega-company-hashtag)
-                                      (when (telega-chat-bot-p telega-chatbuf--chat)
-                                        '(telega-company-botcmd)))))))))
+            (add-hook 'telega-chat-mode-hook #'company-mode)
+            (add-hook 'telega-chat-mode-hook
+                      (lambda ()
+                        (set (make-local-variable 'company-backends)
+                             (append '(telega-company-emoji
+                                       telega-company-username
+                                       telega-company-hashtag)
+                                     (when (telega-chat-bot-p telega-chatbuf--chat)
+                                       '(telega-company-botcmd))))))))
 
 (use-package elfeed
   :bind (("C-x w" . elfeed)
@@ -846,12 +846,11 @@ Use a prefix argument ARG to indicate the creation of a new process instead."
 
    (define-key projectile-command-map (kbd "x t") #'my/projectile-run-term)))
 
-(comment
- (use-package company
-   :bind (:map company-active-map
-               ("C-n" . company-select-next)
-               ("C-p" . company-select-previous))
-   :config (global-company-mode)))
+(use-package company
+  :bind (:map company-active-map
+              ("C-n" . company-select-next)
+              ("C-p" . company-select-previous))
+  :commands (company-mode))
 
 (comment
  (use-package icomplete
