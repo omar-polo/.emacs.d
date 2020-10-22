@@ -363,6 +363,16 @@ Originally from protesilaos' dotemacs."
   (hydra-set-property 'hydra-other-window :verbosity 0)
 
   nil)
+
+(use-package bookmark
+  :bind ("<f7>" . my/select-bookmark)
+  :config
+  (defun my/select-bookmark ()
+    "Select and jump to a bookmark using `completing-read'."
+    (interactive)
+    (when-let (b (completing-read "Bookmark:" (bookmark-all-names)))
+      (bookmark-jump b))))
+
 (use-package uniquify
   :straight nil
   :custom ((uniquify-buffer-name-style 'forward)
