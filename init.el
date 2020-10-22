@@ -1229,6 +1229,7 @@ Use as a value for `completion-in-region-function'."
   (add-hook 'clojure-mode-hook 'my/clojure-mode-hook))
 
 (use-package cider
+  :custom (cider-repl-display-help-banner nil)
   :bind (:map cider-repl-mode-map
               ("C-c C-l" . cider-repl-clear-buffer))
   :config
