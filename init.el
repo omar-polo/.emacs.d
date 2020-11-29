@@ -1529,6 +1529,10 @@ Use as a value for `completion-in-region-function'."
 (use-package sql-indent
   :hook ((sql-mode . sqlind-minor-mode)))
 
+(use-package pq
+  :straight nil
+  :load-path "/home/op/build/emacs-libpq/")
+
 (use-package markdown-mode
   :mode "\\.md\\'"
   :hook ((markdown-mode . auto-fill-mode)))
