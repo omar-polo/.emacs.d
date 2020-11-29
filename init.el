@@ -1292,6 +1292,11 @@ Use as a value for `completion-in-region-function'."
  (use-package whole-line-or-region
    :config (whole-line-or-region-global-mode +1)))
 
+(use-package etags
+  :straight nil
+  ;; reload tags without asking
+  :custom ((tags-revert-without-query 1)))
+
 (use-package yasnippet
   :bind (:map yas-minor-mode-map
          ("<tab>" . nil)
