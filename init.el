@@ -949,17 +949,64 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
                    (error (message "Missing rcirc configuration!")))))
 
 (use-package telega
-  :config (progn
-            (add-hook 'telega-root-mode-hook 'telega-notifications-mode)
-            (add-hook 'telega-chat-mode-hook #'company-mode)
-            (add-hook 'telega-chat-mode-hook
-                      (lambda ()
-                        (set (make-local-variable 'company-backends)
-                             (append '(telega-company-emoji
-                                       telega-company-username
-                                       telega-company-hashtag)
-                                     (when (telega-chat-bot-p telega-chatbuf--chat)
-                                       '(telega-company-botcmd))))))))
+  :hook ((telega-root-mode . telega-notifications-mode)
+         (telega-chat-mode . typo-mode)
+         (telega-chat-mode . my/telega-enable-company))
+  :bind (:map telega-root-mode-map
+              ("C-c C-b" . my/select-telega-chat)
+              :map telega-chat-mode-map
+              ("C-c C-b" . my/select-telega-chat)
+              :map image-mode-map
+              ("C-c C-b" . my/send-photo-with-telega))
+  :config
+  (defun my/telega-enable-company ()
+    (interactive)
+    (company-mode +1)
+    (set (make-local-variable 'company-backends)
+         (append '(telega-company-emoji
+                   telega-company-username
+                   telega-company-hashtag)
+                 (when (telega-chat-bot-p telega-chatbuf--chat)
+                   '(telega-company-botcmd)))))
+
+  (defun my/send-photo-with-telega ()
+    "Send the current photo with telega.  Select the chat first."
+    (interactive)
+    (let* ((file (buffer-file-name))
+           (chat (my/select-telega-chat)))
+      (when chat
+        (with-current-buffer chat
+          (telega-chatbuf-attach-photo file)))))
+
+  (defun my/select-telega-chat ()
+    "Switch to a telega chat."
+    (interactive)
+    (with-current-buffer "*Telega Root*"
+      (save-excursion
+        (let* ((start (progn (goto-char (point-min))
+                             (search-forward "-/-")
+                             (next-line)
+                             (move-beginning-of-line nil)
+                             (point)))
+               (end (point-max))
+               (lines (cl-loop with lines = nil
+                               with min-line-number = (line-number-at-pos start)
+                               with text-lines = (split-string
+                                                  (buffer-substring-no-properties start end)
+                                                  "\n")
+                               for l in text-lines
+                               for n = min-line-number then (1+ n)
+                               do (push (cons l n) lines)
+                               finally (return (nreverse lines))))
+               (selection (let ((selectrum-should-sort-p nil))
+                            (completing-read "Chat: " lines))))
+          (when selection
+            (let ((line (cdr (assoc selection lines))))
+              (goto-line line)
+              (push-button)
+              (when (= (point) (point-max))
+                (telega-chatbuf-recenter-1 nil))
+              (current-buffer))))))))
 
 (use-package elfeed
   :bind (("C-x w" . elfeed)
