@@ -179,3 +179,12 @@
     (kill-new url)
     (message "Copied: %s" url)))
 
+(comment
+ ;; fix org num after desktop
+ (cl-loop for buf being the buffers
+          when (string-suffix-p ".org" (buffer-name buf) t)
+          do (with-current-buffer buf
+               (remove-overlays)
+               (org-num-mode -1)
+               (org-num-mode +1)))
+)
