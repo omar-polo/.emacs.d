@@ -36,10 +36,10 @@
             `(,mode-line-remote ,mode-line-client ,mode-line-modified)))
 
    ;; vc can be useful
-   (:eval (when-let (vc vc-mode)
-            `(" "
-              ,(substring vc 5)
-              " ")))
+   ;; (:eval (when-let (vc vc-mode)
+   ;;          `(" "
+   ;;            ,(substring vc 5)
+   ;;            " ")))
 
    ;; percentage, line number and narrow
    (:eval (if (my/alt-mode-p)
