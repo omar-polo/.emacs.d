@@ -1533,6 +1533,17 @@ Use as a value for `completion-in-region-function'."
   :straight nil
   :load-path "/home/op/build/emacs-libpq/")
 
+(use-package nov
+  :mode ("\\.epub\\'" . nov-mode)
+  :hook ((nov-mode . my/nov-mode-setup))
+  :custom (nov-text-width t)
+  :commands (nov-bookmark-jump-handler)
+  :config
+  (defun my/nov-mode-setup ()
+    (setq-local olivetti-body-width 100)
+    (face-remap-add-relative 'variable-pitch
+                             :height 1.5)))
+
 (use-package markdown-mode
   :mode "\\.md\\'"
   :hook ((markdown-mode . auto-fill-mode)))
