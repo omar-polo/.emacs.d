@@ -1324,8 +1324,27 @@ Use as a value for `completion-in-region-function'."
                                     c-mode-hook))
     (my/yas-fix-local-condition l)))
 
-(use-package beacon
-  :config (beacon-mode 1))
+(comment
+ (use-package beacon
+   :config (beacon-mode 1)))
+
+(use-package pulse
+  :straight nil
+  :config
+  (defun my/pulse-line (&rest _)
+    "Pulse the current line"
+    (pulse-momentary-highlight-one-line (point)))
+  (dolist (command '(scroll-up-command scroll-down-command
+                                       recenter-top-bottom other-window
+                                       reposition-window))
+    (advice-add command :after #'my/pulse-line))
+
+  (defun my/pulse-kill-ring-save (fn beg end &optional region)
+    "Pulse the region being saved to the kill ring."
+    (pulse-momentary-highlight-region beg end)
+    (apply fn beg end))
+  (advice-add 'kill-ring-save :around #'my/pulse-kill-ring-save)
+  (advice-remove 'kill-ring-save #'my/pulse-kill-ring-save))
 
 (use-package avy
   :custom ((avy-keys '(?s ?n ?t ?h ?d ?i ?u ?e ?o ?a)))
