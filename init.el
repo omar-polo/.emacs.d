@@ -749,9 +749,9 @@ _?_ toggle help    ^ ^                _-_   split vert.
            (proc (get-buffer-process buf)))
       (set-process-sentinel
        proc
-       `(lambda (process event)
-          (if (string= event "finished\n")
-              (kill-buffer ,buf))))))
+       (lambda (process event)
+         (if (string= event "finished\n")
+             (kill-buffer buf))))))
   (add-hook 'term-exec-hook 'my/term-exec-hook))
 
 (use-package keycast
