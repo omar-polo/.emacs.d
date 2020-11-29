@@ -1346,6 +1346,17 @@ Use as a value for `completion-in-region-function'."
   (advice-add 'kill-ring-save :around #'my/pulse-kill-ring-save)
   (advice-remove 'kill-ring-save #'my/pulse-kill-ring-save))
 
+(use-package simple
+  :straight nil
+  :bind (("M-SPC" . cycle-spacing)
+         ("M-u" . upcase-dwim)
+         ("M-l" . downcase-dwim)
+         ("M-c" . capitalize-dwim)))
+
+(use-package view
+  :straight nil
+  :bind (("C-x C-q" . view-mode)))
+
 (use-package avy
   :custom ((avy-keys '(?s ?n ?t ?h ?d ?i ?u ?e ?o ?a)))
   :commands (avy-goto-char
