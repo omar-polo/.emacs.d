@@ -883,6 +883,7 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
     ("q" nil :exit t)))
 
 (use-package elpher
+  :custom (elpher-ipv4-always t)
   :commands (elpher elpher-go elpher-jump))
 
 (use-package magit
