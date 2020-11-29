@@ -1518,7 +1518,13 @@ Use as a value for `completion-in-region-function'."
 
 (use-package sql
   :straight nil
-  :hook ((sql-interactive-mode . toggle-truncate-lines)))
+  :hook ((sql-interactive-mode . toggle-truncate-lines)
+         (sql-mode . my/disable-electric-indent-mode))
+  :config
+  (defun my/disable-electric-indent-mode ()
+    "Disable `electric-indent-mode' locally."
+    (interactive)
+    (electric-indent-local-mode -1)))
 
 (use-package sql-indent
   :hook ((sql-mode . sqlind-minor-mode)))
