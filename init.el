@@ -1561,6 +1561,27 @@ Use as a value for `completion-in-region-function'."
   :mode "\\.go\\'"
   :hook ((go-mode . subword-mode)))
 
+(use-package irony
+  :hook ((c++-mode . irony-mode)
+         (c-mode   . irony-mode)
+         (obj-mode . irony-mode)))
+
+(use-package js
+  :straight nil
+  :hook ((js-mode . abbrev-mode)
+         (js-mode . subword-mode)))
+
+(use-package sh-script
+  :straight nil
+  :custom ((sh-basic-offset 8)
+           (sh-indent-after-loop-construct 8)
+           (sh-indent-after-continuation nil)))
+
+(use-package rc-mode
+  :mode "\\.rc\\'"
+  :interpreter "rc"
+  :hook ((rc-mode-hook . my/enable-tabs)))
+
 (use-package gdscript-mode
   :mode "\\.gd\\'"
   :hook ((gdscript-mode . my/enable-tabs))
