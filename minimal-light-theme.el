@@ -24,7 +24,7 @@
 ;;; Commentary:
 ;;
 ;; A minimalistic color theme to avoid distraction with
-;; colors. Based on monochrome theme.
+;; colors.  Based on monochrome theme.
 
 ;;; Code:
 (deftheme minimal-light "minimal light theme.")
@@ -49,9 +49,7 @@
        (hl-background region)
        (hl-face-background nil)
        (failure "red")
-       (org-background "grey98")
-       )
-  ;; setting it as the other below won't work :/
+       (org-background "grey98"))
   (custom-theme-set-faces
    'minimal-light
 
@@ -128,7 +126,7 @@
       ;; hl-line-mode
      `(hl-line ((,class (:background ,hl-background))))
      `(hl-line-face ((,class (:background ,hl-face-background))))
-     
+
       ;; highlight-stages-mode
      `(highlight-stages-negative-level-face ((,class (:foreground ,failure))))
      `(highlight-stages-level-1-face ((,class (:background ,org-background))))
@@ -146,6 +144,13 @@
      `(org-level-7 ((,class (:foreground ,foreground))))
      `(org-level-8 ((,class (:foreground ,foreground))))
 
+     `(org-block ((,class (:inherit fixed-pitch))))
+     `(org-table   ((,class (:inherit fixed-pitch))))
+     `(org-meta-line ((,class (:inherit (font-lock-comment-face fixed-pitch)))))
+     `(org-property-value ((,class (:inherit fixed-pitch))) t)
+     `(org-verbatim ((,class (:inherit (shadow fixed-pitch)))))
+     `(org-quote ((,class (:slant italic))))
+
      ;; outline
      `(outline-1 ((,class (:inherit org-level-1))))
      `(outline-2 ((,class (:inherit org-level-2))))
@@ -158,11 +163,12 @@
 
      `(org-document-title ((,class (:foreground ,foreground))))
 
-     `(org-link ((,class (:background ,org-background :foreground ,foreground :underline t))))
+     `(org-link ((,class (:foreground ,foreground :underline t))))
      `(org-tag ((,class (:background ,org-background :foreground ,foreground))))
      `(org-warning ((,class (:background ,region :foreground ,foreground :weight bold))))
-     `(org-todo ((,class (:background ,region :foreground ,foreground :weight bold))))
-     `(org-done ((,class (:background ,region :foreground ,foreground :weight bold))))
+     `(org-todo ((,class (:weight bold))))
+     `(org-done ((,class (:weight bold))))
+     `(org-headline-done ((,class (:foreground ,foreground))))
 
      `(org-table ((,class (:background ,org-background))))
      `(org-code ((,class (:background ,org-background))))
@@ -189,7 +195,13 @@
 
      ;; sh-mode
      `(sh-heredoc ((,class (:inherit base-faces :slant italic))))
-     ))
+
+     ;; telega
+     `(telega-msg-heading ((,class (:inherit base-faces :underline ,comment-delimiter
+                                             :foreground ,comment))))
+     `(telega-msg-user-title ((,class (:inherit telega-msg-heading))))
+     `(telega-msg-inline-reply ((,class (:inherit telega-msg-heading
+                                                  :slant italic))))))
 
 ;;;###autoload
 (when (and (boundp 'custom-theme-load-path) load-file-name)
@@ -197,3 +209,4 @@
                (file-name-as-directory (file-name-directory load-file-name))))
 
 (provide-theme 'minimal-light)
+;;; minimal-light-theme.el ends here
