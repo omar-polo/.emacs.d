@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: when-let
+# key: when-let
+# --
+(when-let (${1:symbol} ${2:val})
+  `yas-selected-text`$0)

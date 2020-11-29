@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: defmethod
+# key: defmethod
+# --
+(defmethod ${1:multifn} ${2:dispatch-val} [${3:args}]
+  $0)

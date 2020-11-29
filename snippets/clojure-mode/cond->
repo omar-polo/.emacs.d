@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: cond->
+# key: cond->
+# --
+(cond-> `yas-selected-text`${1:thing}
+  ${2:true} ${3:action})

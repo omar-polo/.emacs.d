@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: #ifndef
+# key: #ifndef
+# --
+#ifndef ${1:$$(let ((u (upcase yas-text)))
+               (replace-regexp-in-string "[ -]" "_" u))}
+$0
+#endif /* $1 */

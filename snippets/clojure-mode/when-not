@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: when-not
+# key: when-not
+# --
+(when-not ${1:condition}
+  $0)

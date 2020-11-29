@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: when-some
+# key: when-some
+# --
+(when-some [${1:var} ${2:thing}]
+  $0)

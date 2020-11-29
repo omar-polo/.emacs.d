@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: defn-
+# key: defn-
+# --
+(defn- ${1:func}${3:
+  "${4:documentation}"
+ } [${2:args}]
+  `yas-selected-text`$0)

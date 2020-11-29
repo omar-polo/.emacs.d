@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: doseq
+# key: doseq
+# --
+(doseq [${1:var} ${2:seq}]
+  ${0})

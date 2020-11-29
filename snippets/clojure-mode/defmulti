@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: defmulti
+# key: defmulti
+# --
+(defmulti ${1:name} ${2:
+  "${3:docstring?}"
+  }${4:dispatch-fn})

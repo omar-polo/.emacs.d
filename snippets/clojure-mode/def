@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: def
+# key: def
+# --
+(def ${1:^:private }${2:thing} `yas-selected-text`$0)
