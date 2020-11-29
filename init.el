@@ -603,6 +603,31 @@ With prefix argument ARG switches (or create) the nth side-term."
     ("l" winner-redo "redo")
     ("q" nil :exit nil)))
 
+(use-package ace-window
+  :straight (:type git :host github :repo "notmgsk/ace-window" :branch "feature/posframe")
+  :bind (("M-o" . ace-window))
+  :custom-face (aw-leading-char-face ((t (:inherith ace-jump-face-foreground
+                                                    :height 3.0))))
+  :custom ((aw-keys '(?s ?n ?t ?h ?d ?i ?u ?e ?o ?a))
+           (aw-scope 'frame)
+           (aw-dispatch-default '((?x aw-delete-window "Delete Window")
+	                          (?m aw-swap-window "Swap Windows")
+	                          (?M aw-move-window "Move Window")
+	                          (?c aw-copy-window "Copy Window")
+	                          (?j aw-switch-buffer-in-window "Select Buffer")
+	                          (?f aw-flip-window)
+	                          (?w aw-switch-buffer-other-window "Switch Buffer Other Window")
+	                          (?c aw-split-window-fair "Split Fair Window")
+	                          (?v aw-split-window-vert "Split Vert Window")
+	                          (?b aw-split-window-horz "Split Horz Window")
+	                          (?O delete-other-windows "Delete Other Windows")
+	                          (?? aw-show-dispatch-help))))
+  :config
+  ;; the fork requires posframe
+  (use-package posframe)
+
+  (ace-window-posframe-mode))
+
 (use-package transpose-frame
   :bind ("M-#" . my/hydra-window/body)
   :commands (transpose-frame flip-frame flop-frame
