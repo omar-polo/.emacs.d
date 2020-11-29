@@ -305,6 +305,13 @@ Originally from protesilaos' dotemacs."
            (visible-bell nil)
            (load-prefer-newer t)))
 
+(use-package emacs
+  ;; hyper stuff!!!
+  :bind (("H-&" . delete-other-windows)
+         ("H-{" . split-window-below)
+         ("H-[" . split-window-right)
+         ("H-o" . other-window)))
+
 (use-package hydra
   :config
 
