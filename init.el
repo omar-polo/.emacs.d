@@ -1568,7 +1568,23 @@ Use as a value for `completion-in-region-function'."
 (use-package sly
   :hook ((lisp-mode . prettify-symbols-mode)
          (lisp-mode . sly-symbol-completion-mode))
-  :custom (inferior-lisp-program "sbcl"))
+  :custom (inferior-lisp-program "sbcl")
+  :bind (:map sly-mode-map
+              ("C-c C-z" . my/sly-mrepl))
+  :config
+  (defun my/sly-mrepl ()
+    "Find or create the first useful REPL for the default connection in a side window."
+    (interactive)
+    (save-excursion
+      (sly-mrepl nil))
+    (let ((buf (sly-mrepl--find-create (sly-current-connection))))
+      (display-buffer-in-side-window
+       buf (cddr (assoc "^\\*sly-mrepl" display-buffer-alist)))))
+
+  (use-package sly-mrepl
+    :straight nil  ;; it's part of sly!
+    :bind (:map sly-mrepl-mode-map
+                ("M-r" . comint-history-isearch-backward))))
 
 (use-package gerbil
   :straight nil
@@ -1623,7 +1639,9 @@ Use as a value for `completion-in-region-function'."
 (use-package cider
   :custom (cider-repl-display-help-banner nil)
   :bind (:map cider-repl-mode-map
-              ("C-c C-l" . cider-repl-clear-buffer))
+              ("C-c C-l" . cider-repl-clear-buffer)
+              :map cider-mode-map
+              ("C-c C-z" . my/cider-repl))
   :config
   (setq cider-enhanced-cljs-completion-p nil)
   (defun my/cider-find-var (fn &optional arg var line)
@@ -1652,7 +1670,14 @@ cause.
 Anyway, set forcefully `eldoc-documentation-function' to
 `cider-eldoc' fixes the situation."
     (setq eldoc-documentation-function #'cider-eldoc))
-  (add-hook 'cider-mode-hook #'my/fix-cider-eldoc))
+  (add-hook 'cider-mode-hook #'my/fix-cider-eldoc)
+
+  (defun my/cider-repl ()
+    "Switch to repl buffer in side window."
+    (interactive)
+    (when-let (buf (cider-current-repl))
+      (display-buffer-in-side-window
+       buf (cddr (assoc "^\\*cider-repl" display-buffer-alist))))))
 
 (use-package flymake
   :straight nil
