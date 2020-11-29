@@ -28,7 +28,7 @@
 
       ;; use the ``tech preview''.  mu4e uses gnus article-mode to
       ;; show the messages.
-      mu4e-view-use-gnus t
+      mu4e-view-use-gnus nil
 
       ;; use localhost to send mails
       message-send-mail-function 'smtpmail-send-it

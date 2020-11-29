@@ -138,8 +138,9 @@ insert a list item."
   "Major mode for editing text/gemini 'geminimap' documents"
   (setq font-lock-defaults '(gemini-highlights))
   (visual-line-mode 1)
-  (when (featurep 'visual-fill-column)
-    (visual-fill-column-mode 1)))
+  ;; (when (featurep 'visual-fill-column)
+  ;;   (visual-fill-column-mode 1))
+  )
 
 ;;;###autoload
 (progn

@@ -8,6 +8,12 @@
   "Ignore everything in its BODY and return nil."
   ())
 
+(defun my/auto-fill-comment ()
+  "Enable auto filling for comments."
+  (setq-local comment-auto-fill-only-comments t)
+  (auto-fill-mode +1))
+(add-hook 'prog-mode-hook #'my/auto-fill-comment)
+
 (defun my/term ()
   "Sensible wrapper for `ansi-term'."
   (interactive)
@@ -17,8 +23,6 @@
 ;; pressing C-<SPC> to navigate the ring backwards, instead of C-u
 ;; C-<SPC> again.
 (setq set-mark-command-repeat-pop t)
-
-(setq tab-always-indent 'complete)
 
 (autoload 'ffap-file-at-point "ffap")
 (defun my/complete-path-at-point+ ()
@@ -39,33 +43,17 @@
                       nil
                       'local)))
 
-;; disable tabs everywhere (we'll enable them for the right modes
-;; later)
-(setq-default indent-tabs-mode nil)
-
 ;; get rid of the "yes or no" and replace with "y or n"
 (fset 'yes-or-no-p 'y-or-n-p)
 
 ;; don't use (x11) windows for asking things
 (setq use-dialog-box nil)
 
-(defun my/enable-tabs ()
-  "Enable `indent-tabs-mode' in the current buffer."
-  (interactive)
-  (setq indent-tabs-mode t))
+(add-hook 'text-mode-hook #'abbrev-mode)
 
 (add-hook 'emacs-lisp-mode-hook 'checkdoc-minor-mode)
 (add-hook 'emacs-lisp-mode-hook 'prettify-symbols-mode)
 (add-hook 'log-edit-mode-hook 'auto-fill-mode)
-
-(dolist (hook '(sh-mode-hook shell-script-mode-hook c-mode-hook c++-mode-hook))
-  (add-hook hook 'my/enable-tabs))
-
-(setq-default sh-basic-offset 8
-              sh-indent-after-loop-construct 8
-              sh-indent-after-continuation nil)
-
-(setq tab-width 8)
 
 (setq x-stretch-cursor t)
 
@@ -94,9 +82,6 @@
 (define-key global-map (kbd "C-z") nil)
 (define-key global-map (kbd "C-M-/") #'dabbrev-expand)
 (define-key global-map (kbd "C-x C-b") #'ibuffer)
-(define-key global-map (kbd "<f5>") #'(lambda ()
-                                        (interactive)
-                                        (ansi-term (getenv "SHELL"))))
 (define-key global-map (kbd "<f6>") #'display-line-numbers-mode)
 
 (defun emc--move-text-impl (arg)
@@ -164,22 +149,27 @@ REGION are passed to `fill-paragraph'."
     (funcall fn justify region)))
 (advice-add 'fill-paragraph :around #'my/fill-or-unfill)
 
-(defun my/scroll-up-command ()
-  "Like `scroll-up-command', but does not accept a parameter and recenter the cursor."
-  (interactive)
-  (move-to-window-line -1)
-  (recenter))
-(define-key global-map (kbd "C-v") #'my/scroll-up-command)
+(setq scroll-preserve-screen-position t
+      next-screen-context-lines 1)
 
-(defun my/scroll-down-command ()
-  "Like `scroll-down-command', but doesn't accept a parameter and recenter afterwards."
-  (interactive)
-  (move-to-window-line 1)
-  (recenter))
-(define-key global-map (kbd "M-v") #'my/scroll-down-command)
+;; these becomes buffer-local when set
+(setq-default scroll-up-aggressively 0.0
+              scroll-down-aggressively 0.0)
 
-;; reload tags without asking
-(setq tags-revert-without-query 1)
+(comment
+ (defun my/scroll-up-command ()
+   "Like `scroll-up-command', but does not accept a parameter and recenter the cursor."
+   (interactive)
+   (move-to-window-line -1)
+   (recenter))
+ (define-key global-map (kbd "C-v") #'my/scroll-up-command)
+
+ (defun my/scroll-down-command ()
+   "Like `scroll-down-command', but doesn't accept a parameter and recenter afterwards."
+   (interactive)
+   (move-to-window-line 1)
+   (recenter))
+ (define-key global-map (kbd "M-v") #'my/scroll-down-command))
 
 (setq sentence-end-double-space t)
 
@@ -197,8 +187,6 @@ REGION are passed to `fill-paragraph'."
 (add-hook 'after-make-frame-functions
           (lambda (_frame)
             (setq x-selection-timeout 1)))
-
-(define-key global-map (kbd "C-c o") 'occur)
 
 (defun my/list-major-modes ()
   "List all the major modes.  Inspired from ieure/scratch-el.  Naïve probably."
@@ -364,6 +352,10 @@ Originally from protesilaos' dotemacs."
 
   nil)
 
+(use-package replace
+  :straight nil
+  :bind (("C-c o" . occur)))
+
 (use-package bookmark
   :bind ("<f7>" . my/select-bookmark)
   :config
@@ -373,23 +365,12 @@ Originally from protesilaos' dotemacs."
     (when-let (b (completing-read "Bookmark:" (bookmark-all-names)))
       (bookmark-jump b))))
 
-(use-package uniquify
+(use-package sam
   :straight nil
-  :custom ((uniquify-buffer-name-style 'forward)
-           (uniquify-strip-common-suffix t)))
-
-(use-package saveplace
-  :straight nil
-  :config (save-place-mode 1))
-
-(use-package desktop
-  :hook ((after-init . desktop-read)
-         (after-init . desktop-save-mode))
-  :custom ((desktop-base-file-name ".desktop")
-           (desktop-base-lock-name ".desktop.lock")
-           (desktop-restore-eager 8)))
+  :load-path "~/w/sam/master/")
 
 (use-package project
+  :bind ("<f5>" . my/project-spawn-term)
   :config
   (let ((map  (make-sparse-keymap))
         (keys '(("f" . project-find-file)
@@ -404,37 +385,203 @@ Originally from protesilaos' dotemacs."
                 ("c" . project-compile))))
     (cl-loop for (key . func) in keys
              do (define-key map (kbd key) func))
-    (define-key global-map (kbd "C-c p") map)
+    (define-key global-map (kbd "C-c p") map))
 
-    (defmacro with-directory (dir &rest body)
-      "Execute BODY with `default-directory' bound to DIR."
-      (declare (indent defun))
-      `(let ((default-directory ,dir))
-         ,@body))
+  (defmacro with-directory (dir &rest body)
+    "Execute BODY with `default-directory' bound to DIR."
+    (declare (indent defun))
+    `(let ((default-directory ,dir))
+       ,@body))
 
-    ;; very very very similar to projectile-generate-process-name!
-    (defun my/generate-bufname (proc new)
-      (let* ((p     (substring (cdr (project-current)) 0 -1))
-             (pname (file-name-nondirectory p))
-             (name  (format "%s %s" proc pname)))
-        (if new
-            (generate-new-buffer-name name)
-          name)))
+  ;; very very very similar to projectile-generate-process-name!
+  (defun my/generate-bufname (proc new)
+    (let* ((p     (substring (cdr (project-current)) 0 -1))
+           (pname (file-name-nondirectory p))
+           (name  (format "%s-%s" proc pname)))
+      (if new
+          (generate-new-buffer-name name)
+        name)))
 
-    (defun my/project-spawn-term (arg)
-      (interactive "P")
-      (with-directory (cdr (project-current))
-        (ansi-term (getenv "SHELL") (my/generate-bufname "term" arg))))
+  (defun my/project-spawn-term (arg)
+    (interactive "P")
+    (with-directory (cdr (project-current))
+      (ansi-term (getenv "SHELL") (my/generate-bufname "term" arg))))
 
-    (defun my/project-spawn-eshell (arg)
-      (interactive "P")
-      (with-directory (cdr (project-current))
-        (let ((eshell-buffer-name (my/project-spawn-term "eshell" arg)))
-          (eshell))))))
+  (defun my/project-spawn-eshell (arg)
+    (interactive "P")
+    (with-directory (cdr (project-current))
+      (let ((eshell-buffer-name (my/generate-bufname "eshell" arg)))
+        (eshell)))))
 
-(use-package speedbar
-  :bind (("<f8>" . speedbar-get-focus)
-         ("<S-<f8>" . speedbar)))
+(use-package help-mode
+  :straight nil
+  :hook ((help-mode . visual-line-mode)))
+
+;; window stuff
+(use-package emacs
+  :straight nil
+  :custom
+  ;; XXX: it's a good idea to keep the (display-buffer-in-side-window)
+  ;; as the first rule (even though it can be everywhere I think).
+  ;; This is because we can then
+  ;;
+  ;;    (cddr (assoc "..." display-buffer-alist))
+  ;;
+  ;; to fetch the right configuration for the window in custom
+  ;; display-buffer-in-side-window
+  (display-buffer-alist
+   `(("\\*ansi-term\\*"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . -1)
+      (window-parameters . ((no-delete-other-windows . t))))
+     ("^\\*sly-mrepl"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 0)
+      (window-parameters . ((no-delete-other-windows . t))))
+     ("\\*sly-completions\\*"
+      (display-buffer-in-side-window)
+      (window-width . 0.3)
+      (side . right)
+      (slot . 1)
+      (window-parameters . ((no-delete-other-windows . t))))
+     ("^\\*cider-repl"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 0)
+      (window-parameters . ((no-delete-other-windows . t))))
+     ("\\*[Hh]elp\\*"
+      (display-buffer-in-side-window)
+      (window-width . 0.30)
+      (side . left)
+      (slot . 0))
+     ("\\*\\(Backtrace\\|Warnings\\|compilation\\|Compile-Log\\|Messages\\)\\*"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 1))
+     ("\\*Occur\\*"
+      (display-buffer-in-side-window)
+      (window-width . 0.3)
+      (side . right)
+      (slot . 1)
+      (window-parameters . ((no-delete-other-windows . t))))
+     ("\\*godot - .*\\*"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 1))))
+  :bind (("S-<f5>" . my/side-term)
+         ("<f8>" . my/side-dired)
+         ("S-<f8>" . window-toggle-side-windows))
+  ;; :bind (("s-n" . next-buffer)
+  ;;        ("s-p" . previous-buffer)
+  ;;        ("s-o" . other-window)
+  ;;        ("s-{" . split-window-below)
+  ;;        ("s-[" . split-window-right)
+  ;;        ("s-!" . delete-window)
+  ;;        ("s-&" . ))
+  :config
+  (defun my/side-dired ()
+    "Open root directory of the current project in dired in the side window."
+    (interactive)
+    (let ((buf (dired-noselect (or (project-root (project-current))
+                                   default-directory))))
+      (display-buffer-in-side-window
+       buf `((side . left)
+             (slot . 0)
+             (window-width . 0.2)
+             (window-parameters . ((mode-line-format . (" %b"))
+                                   (no-delete-other-windows . t)))))))
+
+  (defun my/side-term (arg)
+    "Create or switch to a term buffer in the side window for the current project.
+
+With prefix argument ARG switches (or create) the nth side-term."
+    (interactive "p")
+    (with-directory (project-root (project-current))
+      (let* ((dir     (substring default-directory 0 -1)) ;drop the last /
+             (bufname (format "*term-%s*%s" (file-name-nondirectory dir)
+                              (if (and arg (not (= arg 1)))
+                                  (format "<%d>" arg)
+                                "")))
+             (buf     (get-buffer bufname)))
+        (when (not buf)
+          (setq buf (get-buffer-create bufname))
+          (with-current-buffer buf
+            (term-mode)
+            (term-exec buf "term" (getenv "SHELL") nil nil)
+            (term-char-mode)))
+        (display-buffer-in-side-window
+         buf (cddr (assoc "\\*ansi-term\\*" display-buffer-alist))))))
+
+  (defun my/buffer-to-side-window ()
+    "Place the current buffer in the side window at the bottom."
+    (interactive)
+    (let ((buf (current-buffer)))
+      (display-buffer-in-side-window
+       buf
+       ;; steal the rules from *ansi-term*
+       (cddr (assoc "\\*ansi-term\\*" display-buffer-alist)))
+      (delete-window))))
+
+(use-package gdb-mi
+  :straight nil
+  :custom ((gdb-many-windows t)))
+
+;; whitespace and indentation stuff
+(use-package whitespace
+  :straight nil
+  :custom ((whitespace-style '(face trailing))
+           (backward-delete-char-untabify-method 'hungry)
+           (tab-always-indent 'complete)
+           (tab-width 8))
+  :hook ((conf-mode-hook . my/enable-tabs)
+         (text-mode-hook . my/enable-tabs)
+         (prog-mode      . whitespace-mode)
+         (text-mode      . whitespace-mode))
+  :config
+  (setq-default indent-tabs-mode nil)
+
+  (defun my/enable-tabs ()
+    "Enable `indent-tabs-mode' in the current buffer."
+    (interactive)
+    (setq-local indent-tabs-mode t))
+
+  (defun my/disable-tabs ()
+    "Disable `indent-tabs-mode' in the current buffer."
+    (interactive)
+    (setq-local indent-tabs-mode nil))
+
+  (dolist (hook '(sh-mode-hook shell-script-mode-hook
+                               c-mode-hook c++-mode-hook))
+    (add-hook hook 'my/enable-tabs)))
+
+(use-package electric
+  :straight nil
+  :custom ((electric-indent-inhibit t)))
+
+(use-package uniquify
+  :straight nil
+  :custom ((uniquify-buffer-name-style 'forward)
+           (uniquify-strip-common-suffix t)))
+
+(use-package saveplace
+  :straight nil
+  :config (save-place-mode 1))
+
+(use-package desktop
+  :straight nil
+  :hook ((after-init . desktop-read)
+         (after-init . desktop-save-mode))
+  :custom ((desktop-base-file-name ".desktop")
+           (desktop-base-lock-name ".desktop.lock")
+           (desktop-restore-eager 8)
+	   (desktop-restore-frames nil)))
 
 (use-package winner
   :straight nil
@@ -530,9 +677,14 @@ _?_ toggle help    ^ ^                _-_   split vert.
   :hook (text-mode . guess-language-mode)
   :config
   (setq guess-language-langcodes '((en . ("en_GB" "English"))
-                                   (it . ("it_IT" "Italian")))
+                                   (it . ("it" "Italian")))
         guess-language-languages '(en it)
         guess-language-min-paragraph-length 45))
+
+(use-package olivetti
+  :hook ((gemini-mode . olivetti-mode)
+         (markdown-mode . olivetti-mode)
+         (nov-mode . olivetti-mode)))
 
 (use-package unicode-fonts
   :config
@@ -555,7 +707,9 @@ _?_ toggle help    ^ ^                _-_   split vert.
 (use-package term
   :straight nil
   :bind (:map term-raw-map
-              ("C-c C-y" . term-paste))
+              ("C-c C-y" . term-paste)
+              ("M-o" . ace-window))
+  :commands (term-mode term)
   :config
   (defun my/term-exec-hook ()
     "Kill term buffer after the shell is closed.  Taken from oremacs."
@@ -711,11 +865,14 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
    :config (md4rd--oauth-fetch-refresh-token)))
 
 ;; defer loading of both org and mu4e stuff
-(run-with-idle-timer 1 nil
-                     (lambda ()
-                       (let ((gc-cons-threshold most-positive-fixnum))
-                         (load "my-org-stuff")
-                         (load "my-mail-stuff"))))
+(comment
+ (run-with-idle-timer 1 nil
+                      (lambda ()
+                        (let ((gc-cons-threshold most-positive-fixnum))
+                          ))))
+
+(load "my-org-stuff")
+(load "my-mail-stuff")
 
 (use-package eww
   :straight nil
@@ -723,6 +880,9 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
   :config (progn (setq ;; browse-url-browser-function 'eww-browse-url
                        url-cookie-trusted-urls nil
                        url-cookie-untrusted-urls '(".*"))))
+
+;; (use-package webkit
+;;   :load-path "~/build/emacs-webkit/")
 
 (use-package rcirc
   :defer 1
@@ -1021,7 +1181,7 @@ Use as a value for `completion-in-region-function'."
   :config (beacon-mode 1))
 
 (use-package avy
-  :custom ((avy-keys '(?a ?o ?e ?u ?i ?d ?h ?t ?n ?s)))
+  :custom ((avy-keys '(?s ?n ?t ?h ?d ?i ?u ?e ?o ?a)))
   :commands (avy-goto-char
              avy-goto-char-2
              avy-goto-word-1
@@ -1051,95 +1211,115 @@ Use as a value for `completion-in-region-function'."
          ("C-k" . sp-kill-hybrid-sexp))
   :hook ((prog-mode . turn-on-smartparens-strict-mode)
          (cider-repl-mode . turn-on-smartparens-strict-mode)
-         (LaTeX-mode . turn-on-smartparens-strict-mode))
-  :config (progn (require 'smartparens-config)
-                 ;; (show-smartparens-global-mode t)
+         (LaTeX-mode . turn-on-smartparens-strict-mode)
+         (web-mode . my/smartparens-web-mode))
+  :custom ((sp-highlight-pair-overlay nil))
+  :config
+  (require 'smartparens-config)
+  ;; (show-smartparens-global-mode t)
 
-                 (defun my/newline-indent (&rest _ignored)
-                   (split-line)
-                   (indent-for-tab-command))
+  (defun my/smartparens-web-mode ()
+    (setq web-mode-enable-auto-pairing nil))
 
-                 (let ((c-like '(c++mode
-                                 c-mode
-                                 css-mode
-                                 go-mode
-                                 java-mode
-                                 js-jsx-mode
-                                 js2-jsx-mod
-                                 js2-mode
-                                 json-mode
-                                 python-mode
-                                 web-mode)))
-                   (dolist (x `(("{" . ,c-like)
-                                ("[" . ,c-like)
-                                ("(" . (sql-mode ,@c-like))))
-                     (dolist (mode (cdr x))
-                       (sp-local-pair mode (car x) nil :post-handlers
-                                      '((my/newline-indent "RET")
-                                        (my/newline-indent "<return>"))))))
-                 ;; it does not work.
-                 (sp-local-pair 'gerbil-mode "'" nil :actions :rem)
-                 (sp-local-pair 'gerbil-mode "`" nil :actions :rem)
+  ;; (defun my/sp-web-mode-is-code-context (id action context)
+  ;;   (and (eq action 'insert)
+  ;;        (not (or (get-text-property (point) 'part-side)
+  ;;                 (get-text-property (point) 'block-side)))))
+  ;; (sp-local-pair 'web-mode "<" nil :when '(my/sp-web-mode-is-code-context))
+  ;; (sp-local-pair 'web-mode "<" nil :when nil)
 
-                 (defhydra hydra-sp (:hint nil)
-                   "
+  (defun my/newline-indent (&rest _ignored)
+    (split-line)
+    (indent-for-tab-command))
+
+  (let ((c-like '(c++mode
+                  c-mode
+                  css-mode
+                  go-mode
+                  java-mode
+                  js-mode
+                  json-mode
+                  python-mode
+                  web-mode)))
+    (dolist (x `(("{" . ,c-like)
+                 ("[" . ,c-like)
+                 ("(" . (sql-mode ,@c-like))))
+      (dolist (mode (cdr x))
+        (sp-local-pair mode (car x) nil :post-handlers
+                       '((my/newline-indent "RET")
+                         (my/newline-indent "<return>"))))))
+  ;; it does not work.
+  (sp-local-pair 'gerbil-mode "'" nil :actions :rem)
+  (sp-local-pair 'gerbil-mode "`" nil :actions :rem)
+
+  (defhydra hydra-sp (:hint nil)
+    "
  Moving^^^^                       Slurp & Barf^^   Wrapping^^            Sexp juggling^^^^               Destructive
 ------------------------------------------------------------------------------------------------------------------------
  [_a_] beginning  [_n_] down      [_h_] bw slurp   [_R_]   rewrap        [_S_] split   [_t_] transpose   [_c_] change inner  [_w_] copy
  [_e_] end        [_N_] bw down   [_H_] bw barf    [_u_]   unwrap        [_s_] splice  [_A_] absorb      [_C_] change outer
  [_f_] forward    [_p_] up        [_l_] slurp      [_U_]   bw unwrap     [_r_] raise   [_E_] emit        [_k_] kill          [_g_] quit
  [_b_] backward   [_P_] bw up     [_L_] barf       [_(__{__[_] wrap (){}[]   [_j_] join    [_o_] convolute   [_K_] bw kill       [_q_] quit"
-                   ("?" (hydra-set-property 'hydra-sp :verbosity 1))
+    ("?" (hydra-set-property 'hydra-sp :verbosity 1))
 
-                   ;; moving
-                   ("a" sp-beginning-of-sexp)
-                   ("e" sp-end-of-sexp)
-                   ("f" sp-forward-sexp)
-                   ("b" sp-backward-sexp)
-                   ("n" sp-down-sexp)
-                   ("N" sp-backward-down-sexp)
-                   ("p" sp-up-sexp)
-                   ("P" sp-backward-up-sexp)
+    ;; moving
+    ("a" sp-beginning-of-sexp)
+    ("e" sp-end-of-sexp)
+    ("f" sp-forward-sexp)
+    ("b" sp-backward-sexp)
+    ("n" sp-down-sexp)
+    ("N" sp-backward-down-sexp)
+    ("p" sp-up-sexp)
+    ("P" sp-backward-up-sexp)
 
-                   ;; slurping & barfing
-                   ("h" sp-backward-slurp-sexp)
-                   ("H" sp-backward-barf-sexp)
-                   ("l" sp-forward-slurp-sexp)
-                   ("L" sp-forward-barf-sexp)
+    ;; slurping & barfing
+    ("h" sp-backward-slurp-sexp)
+    ("H" sp-backward-barf-sexp)
+    ("l" sp-forward-slurp-sexp)
+    ("L" sp-forward-barf-sexp)
 
-                   ;; wrapping
-                   ("R" sp-rewrap-sexp)
-                   ("u" sp-unwrap-sexp)
-                   ("U" sp-backward-unwrap-sexp)
-                   ("(" sp-wrap-round)
-                   ("[" sp-wrap-square)
-                   ("{" sp-wrap-curly)
+    ;; wrapping
+    ("R" sp-rewrap-sexp)
+    ("u" sp-unwrap-sexp)
+    ("U" sp-backward-unwrap-sexp)
+    ("(" sp-wrap-round)
+    ("[" sp-wrap-square)
+    ("{" sp-wrap-curly)
 
-                   ;; sexp juggling
-                   ("S" sp-split-sexp)
-                   ("s" sp-splice-sexp)
-                   ("r" sp-raise-sexp)
-                   ("j" sp-join-sexp)
-                   ("t" sp-transpose-sexp)
-                   ("A" sp-absorb-sexp)
-                   ("E" sp-emit-sexp)
-                   ("o" sp-convolute-sexp)
+    ;; sexp juggling
+    ("S" sp-split-sexp)
+    ("s" sp-splice-sexp)
+    ("r" sp-raise-sexp)
+    ("j" sp-join-sexp)
+    ("t" sp-transpose-sexp)
+    ("A" sp-absorb-sexp)
+    ("E" sp-emit-sexp)
+    ("o" sp-convolute-sexp)
 
-                   ;; destructive editing
-                   ("c" sp-change-inner :exit t)
-                   ("C" sp-change-enclosing :exit t)
-                   ("k" sp-kill-sexp)
-                   ("K" sp-backward-kill-sexp)
-                   ("w" sp-copy-sexp)
+    ;; destructive editing
+    ("c" sp-change-inner :exit t)
+    ("C" sp-change-enclosing :exit t)
+    ("k" sp-kill-sexp)
+    ("K" sp-backward-kill-sexp)
+    ("w" sp-copy-sexp)
 
-                   ("q" nil)
-                   ("g" nil))
+    ("q" nil)
+    ("g" nil))
 
-                 (define-key global-map (kbd "s-c")
-                   (lambda ()
-                     (interactive)
-                     (hydra-set-property 'hydra-sp :verbosity 0)
-                     (hydra-sp/body)))))
+  (define-key global-map (kbd "s-c")
+    (lambda ()
+      (interactive)
+      (hydra-set-property 'hydra-sp :verbosity 0)
+      (hydra-sp/body))))
+
+(use-package web-mode
+  :mode (("\\.erb\\'" . web-mode)
+         ("\\.mustache\\'" . web-mode)
+         ("\\.html\\'" . web-mode))
+  :custom ((web-mode-markup-indent-offset 2)
+           (web-mode-css-indent-offset 2)
+           (web-mode-code-indent-offset 2)
+           (web-mode-style-padding 0)))
 
 (use-package cc-mode
   :straight nil
@@ -1150,12 +1330,14 @@ Use as a value for `completion-in-region-function'."
   :custom ((c-basic-offset 8)
            (c-default-style "K&R"))
   :hook ((c-mode . my/c-indent)
-         (c-mode . my/enable-tabs))
-  :config (progn
-            (defun my/c-indent ()
-              (interactive)
-              (c-set-offset 'arglist-intro '+)
-              (c-set-offset 'arglist-cont-nonempty '*))))
+         (c-mode . my/enable-tabs)
+         (c-mode . abbrev-mode)
+         (c++-mode . subword-mode))
+  :config
+  (defun my/c-indent ()
+    (interactive)
+    (c-set-offset 'arglist-intro '+)
+    (c-set-offset 'arglist-cont-nonempty '*)))
 
 (use-package sql
   :straight nil
@@ -1183,7 +1365,8 @@ Use as a value for `completion-in-region-function'."
 
 (use-package gdscript-mode
   :mode "\\.gd\\'"
-  :hook ((gdscript-mode . my/enable-tabs)))
+  :hook ((gdscript-mode . my/enable-tabs))
+  :custom (gdscript-gdformat-save-and-format t))
 
 (comment
  (use-package slime
@@ -1235,7 +1418,11 @@ Use as a value for `completion-in-region-function'."
          ("\\.edn" . clojure-mode))
   :hook ((clojure-mode . subword-mode)
          (clojurec-mode . subword-mode)
-         (clojurescript-mode . subword-mode))
+         (clojurescript-mode . subword-mode)
+
+         (clojure-mode . abbrev-mode)
+         (clojurec-mode . abbrev-mode)
+         (clojurescript-mode . abbrev-mode))
   :config
   ;; reagent.core/with-let is like let
   (add-to-list 'clojure-align-binding-forms "r/with-let" t #'string=)
@@ -1374,10 +1561,28 @@ Anyway, set forcefully `eldoc-documentation-function' to
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(custom-safe-themes
-   '("35f8dfc576d5bf1e7016a20d9ceaa31907e632984705769479bb2592d2e2cf72" "ab4bfc1cdcd6deb99ddc2be8fc0fde03047ab9a8773dded828cdb65f1187372d" "f5a7b992f55e385f30ee40998f74b598849afbbf683eb1cd8b4e6418d637e228" "2a5da04924bdd20aefd78d5093afc07d76520f87f3317c4938bb8ce8e5fcf16f" "5c327f1e2ad451afb2cc1a9d6e33ba548c23be63f9142782880c7e3c7b4a0b44" "e0ca2751f3b849d4d54056312274d5f1aa39e56d2844a1d5797743feea98faa6" "b96f9d3af74bd6b758134c0f587e1e6b39cad97f9d709d033110795cb8da0b57" "c9b17602ab7063bbbcf99f3f74800eaa6e26beaa131a374937e28d381ca259c4" "12fc489c67eb874fead9221152564fd40b1ace698d861a13bfe0683afbdb66dc" "32a3e22993c122ffc0eb716d3013b94bb86044b2536d1b63780e13283f578e11" "33724fc2ebc6972567169cbfc54139ba5f334855d7e74fd0328312ed4f97fb2f" "7bdda6056822c9a8e6d1c72ffc340568f38c54ce1813f75ef01bb69e2f80f774" "8ceaf37709be42c21b3e74597c16ad2a1866a324710b74e3f7388ce8c050d2fa" "d20f39b2c961611e9d135d8e0e92b2444141253f59520063d1119746e202f192" "0e160aa1a035935ea1d70ae8d15e22eb01d9010aa2bec13e1cff50bdc5c04332" "51a10d605e1bc9f3a7912a547d2672d5ab6457e62a00a5e3f4873e6eeee1ffac" "576817b56acd8a77a3957312a14f90b1dad6c9d5e08c0f38b37f301dd8d302c2" "442d9c6c7ab6594bd5970b2d0ab4dd8185fb9602480b309d7326f536ff145e6d" "cc8f864bf528840e09a7e10642bb738dd6edf9ca747745c4a6c1840cd79e1298" "bfae9e706314f5b9da125bf62ba68016318c1d325fd73d05e4a92c664d2da43f" "140c6b56b2ba1fb48169434a1fd8a653922be7e2957da1ffed8cfc19fb90fc43" "0862fe9bb25b1cd6e59509d3ef1c492a1bf55aca50905b9d2109036e52044140" "1617cc7ae9d6e797ef064663e71ccd8af1c7d5a67604bcc33834f25d3be5da50" "ba31dc1c26401c5d5b35de655ea9d7aee9f21527328b54b4da6280c2460f4825" "3aeea09b1181f2a5f924e68a7933920cba06adf165e775883a98749ff57bb10a" "a6b553143cd8a024a045ceeca2c533941d877c8cc16f87ed5d1acdf0c5044bac" "b2f05f6e0fa42e08069f4737e0f7dd0d663c6e3934ba7a42673d1714f7d80400" "9bfd8e0624b0e8e0ba4203901bb58c41b927f8b251272acdcf517d707b5bbc2c" "e5f768c8bf5a5dd28a8b84655b3b5e872e120a75376c669c51805b22910084ca" "5cf82b1be04e91e7024e1934a7a909c124e8e6f2f85fddfacc9724d4ad2ec9b9" "878ddd87e7ecd070bd767237178f1061b01a1eb49afe23c4358499360888339b" "92181d614e1270ac76da6439cf6a14defc9dd16454e0130c8432896632e4c91c" "e240f6d5a8ccd4b2a09518f04ca97cf195f8f337463d62e7c8baa0d5ad40d22c" "5b794603fb798c6f1d57a9c3d5991ed8dd5d0071d1a97f106be4ca772c1d61e8" "5ed24c6f7d30af9c94dfc38fc0fce8ece61e250d5ae1f666d00ef1649dc703d3" "6543614e44b95523f05a0be1e96d78468751f173625b4732d7e99cbce959e312" "0258e7050ef41bbee17959af0cfe6b4e5d2c2e49439a08770ce8f88b202487e9" "c3d13cbba1d87983ef930cda55f08f99f0abb3a4c169446f11141ed19b4af1e6" "b4de17f7a20bd9966e7752a75129df10f33b9a53319de3f1fd48c9fec9806207" "e0b2ad54031a49dd054da83287273f03536c160a2dde832f442e639122add22d" "f6686e892fc9ae1e2c6c447a7bbc4f431e9b28420689eaf01b6fba756ea5f475" "5ded9878f4a765e741f400c081ab4d8c88c78e2c0f44db5c28d4c22fb41526a6" "006a5cbca622bfa20c238c6e7f6856f052cb612381d45c0061c67d1b08b89d2d" "19fb1be04e066c498d6c674b4e61fc922c6467017ec130b5fe2f2e1646c472e9" "b611d0a5e5c71d6ce316588651f0b49c52702e98cfa95795c103fcea60a520e1" "af08c8e7732e89201fd463b3a04d1d57fecb549bf1a191195911dbe58548fb8d" "f4560d1069f889dfef0a7a2b34d6360ad1a0dd1ec80993eb56805cd06121eff5" "410201c91ed9820590f435cca51305cc83c0c900f2ff63ccd08c526e5b453d8c" "9b2818eb1152a37d9d839371473a7446b441e4360ecdd9a9a1fba72dec24c354" "1fafb9b13aadb96480014b871909a26d46c4ee9c3a57b4efea1e6a688e085451" "2b3d504022714945368ef382df8fe9c1929268f9ad49d889e30c8d5244ec8c9e" "fdfaae66c6bc93872c3e4abeb9488a926bf2fba148889a388a75d5fe81fbf44b" "d6d7f76ed646e3b4c8d11dcf004d628cee7b2900aea3c2a63474a0deaa567dd3" "564abaa9051df8d499ab08efb6830a0da279521f1bae39b4d5c99326179e651c" "2386aa5a90d6d6ae25f8c9bb3081c99bebe10622e470408e57d59e95f2902e68" "7168cb6c66db59aefaf58358d192ab8a8f60a6e50b6c2eedb239ff751cc0ed7f" default))
+   '("7aba25b0e38b789e5357dc9b68206060293072fdc3526cb873ae23fea49b79cd" "36a7407dd4f45368abcf4619b25b3af1bc2fdd86b2d7433647d702011d90c5bc" "491b9ce0a6522f80b6a65aeaa19e59580307d2ee5ff7b435382a4caa65a5141d" "66a62497a8c8cffdc823d883b83679e231b95040b10a4b38bdd4f647867b196a" "dd260b6a42d434555c875acb5bab468e54a0cdc666350c8bfa0ed0c8ed487551" "43371217d8e10b4a20aba538c5bb743f10e4d69467b2186576ff47e7fa045ad3" "57e9df4318e6465bd881861a681726501e593da567a16ede7fe63dadb7cb648f" "913516312ab3235a580b403283d5a8835dc601eb0239b224c6c27d35dc6b4f38" "5c0148e41b983f85ab41852d4ce227b957bb7a76bfe51d55184a42e5a8ba1a48" "1f143078ac1fa82ed6808cb8a83665405fefe4e0bfba3059f61d056961bc545a" "87bfa6720edbaf5e9a4483e6c730928e1e177888bbd8ec82059ad6c4f5846383" "57a365527f69e8c5dee8493f188bb6b9796b9f1abdd969dccc4ea8f4bad231e8" "ed7e3976ccb8646522faaa940ccaa2b02d85db1b794cbcd2076fb4590d39ebff" "ea48768f2373a093db258467b7303606b80ce693354eccc87c01374ce45dba48" "09c905d801be38dcd00e69f10751c884358e1c94a5b719ebe18770c6d751ef83" "35f8dfc576d5bf1e7016a20d9ceaa31907e632984705769479bb2592d2e2cf72" "ab4bfc1cdcd6deb99ddc2be8fc0fde03047ab9a8773dded828cdb65f1187372d" "f5a7b992f55e385f30ee40998f74b598849afbbf683eb1cd8b4e6418d637e228" "2a5da04924bdd20aefd78d5093afc07d76520f87f3317c4938bb8ce8e5fcf16f" "5c327f1e2ad451afb2cc1a9d6e33ba548c23be63f9142782880c7e3c7b4a0b44" "e0ca2751f3b849d4d54056312274d5f1aa39e56d2844a1d5797743feea98faa6" "b96f9d3af74bd6b758134c0f587e1e6b39cad97f9d709d033110795cb8da0b57" "c9b17602ab7063bbbcf99f3f74800eaa6e26beaa131a374937e28d381ca259c4" "12fc489c67eb874fead9221152564fd40b1ace698d861a13bfe0683afbdb66dc" "32a3e22993c122ffc0eb716d3013b94bb86044b2536d1b63780e13283f578e11" "33724fc2ebc6972567169cbfc54139ba5f334855d7e74fd0328312ed4f97fb2f" "7bdda6056822c9a8e6d1c72ffc340568f38c54ce1813f75ef01bb69e2f80f774" "8ceaf37709be42c21b3e74597c16ad2a1866a324710b74e3f7388ce8c050d2fa" "d20f39b2c961611e9d135d8e0e92b2444141253f59520063d1119746e202f192" "0e160aa1a035935ea1d70ae8d15e22eb01d9010aa2bec13e1cff50bdc5c04332" "51a10d605e1bc9f3a7912a547d2672d5ab6457e62a00a5e3f4873e6eeee1ffac" "576817b56acd8a77a3957312a14f90b1dad6c9d5e08c0f38b37f301dd8d302c2" "442d9c6c7ab6594bd5970b2d0ab4dd8185fb9602480b309d7326f536ff145e6d" "cc8f864bf528840e09a7e10642bb738dd6edf9ca747745c4a6c1840cd79e1298" "bfae9e706314f5b9da125bf62ba68016318c1d325fd73d05e4a92c664d2da43f" "140c6b56b2ba1fb48169434a1fd8a653922be7e2957da1ffed8cfc19fb90fc43" "0862fe9bb25b1cd6e59509d3ef1c492a1bf55aca50905b9d2109036e52044140" "1617cc7ae9d6e797ef064663e71ccd8af1c7d5a67604bcc33834f25d3be5da50" "ba31dc1c26401c5d5b35de655ea9d7aee9f21527328b54b4da6280c2460f4825" "3aeea09b1181f2a5f924e68a7933920cba06adf165e775883a98749ff57bb10a" "a6b553143cd8a024a045ceeca2c533941d877c8cc16f87ed5d1acdf0c5044bac" "b2f05f6e0fa42e08069f4737e0f7dd0d663c6e3934ba7a42673d1714f7d80400" "9bfd8e0624b0e8e0ba4203901bb58c41b927f8b251272acdcf517d707b5bbc2c" "e5f768c8bf5a5dd28a8b84655b3b5e872e120a75376c669c51805b22910084ca" "5cf82b1be04e91e7024e1934a7a909c124e8e6f2f85fddfacc9724d4ad2ec9b9" "878ddd87e7ecd070bd767237178f1061b01a1eb49afe23c4358499360888339b" "92181d614e1270ac76da6439cf6a14defc9dd16454e0130c8432896632e4c91c" "e240f6d5a8ccd4b2a09518f04ca97cf195f8f337463d62e7c8baa0d5ad40d22c" "5b794603fb798c6f1d57a9c3d5991ed8dd5d0071d1a97f106be4ca772c1d61e8" "5ed24c6f7d30af9c94dfc38fc0fce8ece61e250d5ae1f666d00ef1649dc703d3" "6543614e44b95523f05a0be1e96d78468751f173625b4732d7e99cbce959e312" "0258e7050ef41bbee17959af0cfe6b4e5d2c2e49439a08770ce8f88b202487e9" "c3d13cbba1d87983ef930cda55f08f99f0abb3a4c169446f11141ed19b4af1e6" "b4de17f7a20bd9966e7752a75129df10f33b9a53319de3f1fd48c9fec9806207" "e0b2ad54031a49dd054da83287273f03536c160a2dde832f442e639122add22d" "f6686e892fc9ae1e2c6c447a7bbc4f431e9b28420689eaf01b6fba756ea5f475" "5ded9878f4a765e741f400c081ab4d8c88c78e2c0f44db5c28d4c22fb41526a6" "006a5cbca622bfa20c238c6e7f6856f052cb612381d45c0061c67d1b08b89d2d" "19fb1be04e066c498d6c674b4e61fc922c6467017ec130b5fe2f2e1646c472e9" "b611d0a5e5c71d6ce316588651f0b49c52702e98cfa95795c103fcea60a520e1" "af08c8e7732e89201fd463b3a04d1d57fecb549bf1a191195911dbe58548fb8d" "f4560d1069f889dfef0a7a2b34d6360ad1a0dd1ec80993eb56805cd06121eff5" "410201c91ed9820590f435cca51305cc83c0c900f2ff63ccd08c526e5b453d8c" "9b2818eb1152a37d9d839371473a7446b441e4360ecdd9a9a1fba72dec24c354" "1fafb9b13aadb96480014b871909a26d46c4ee9c3a57b4efea1e6a688e085451" "2b3d504022714945368ef382df8fe9c1929268f9ad49d889e30c8d5244ec8c9e" "fdfaae66c6bc93872c3e4abeb9488a926bf2fba148889a388a75d5fe81fbf44b" "d6d7f76ed646e3b4c8d11dcf004d628cee7b2900aea3c2a63474a0deaa567dd3" "564abaa9051df8d499ab08efb6830a0da279521f1bae39b4d5c99326179e651c" "2386aa5a90d6d6ae25f8c9bb3081c99bebe10622e470408e57d59e95f2902e68" "7168cb6c66db59aefaf58358d192ab8a8f60a6e50b6c2eedb239ff751cc0ed7f" default))
  '(debug-on-error nil)
  '(safe-local-variable-values
-   '((elisp-lint-indent-specs
+   '((sly-port . 4004)
+     (eval let
+           ((args
+             '("/usr/include" "/usr/local/include" "vendor/json/include")))
+           (setq flycheck-clang-include-path args))
+     (package . RFC2388)
+     (web-mode-comment-style . 2)
+     (web-mode-engine . django)
+     (eval web-mode-set-engine "django")
+     (Package . CL-POSTGRES)
+     (Package . POSTMODERN)
+     (Syntax . Ansi-Common-Lisp)
+     (org-export-initial-scope . buffer)
+     (org-id-link-to-org-use-id)
+     (org-export-with-broken-links . t)
+     (org-export-with-title . t)
+     (org-export-with-properties)
+     (eval require 'org-make-toc)
+     (elisp-lint-indent-specs
       (if-let* . 2)
       (when-let* . 1)
       (let* . defun)
@@ -1418,7 +1623,7 @@ Anyway, set forcefully `eldoc-documentation-function' to
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- )
+ '(aw-leading-char-face ((t (:inherith ace-jump-face-foreground :height 3.0)))))
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-page 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
