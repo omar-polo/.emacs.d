@@ -12,7 +12,10 @@
 ;; (setq straight-fix-org nil)
 
 (use-package org
-  :hook ((org-mode . auto-fill-mode))
+  :hook ((org-mode . variable-pitch-mode)
+         (org-mode . visual-line-mode)
+         (org-mode . olivetti-mode)
+         (org-mode . org-num-mode))
   :bind (("C-c c" . org-capture)
          ("C-c a" . org-agenda)
          :map org-src-mode-map
@@ -20,6 +23,9 @@
          ("C-x C-s" . org-edit-src-exit))
   :config
   (setq
+
+   ;; enable styling for quote and verse blocks
+   org-fontify-quote-and-verse-blocks t
 
    ;; enable some special keybindings if point is at the beginning of a
    ;; headline.
@@ -93,8 +99,17 @@
      (python . t)
      (gnuplot . t))))
 
+(use-package valign
+  :straight (:type git :host github :repo "casouri/valign")
+  :hook ((org-mode . valign-mode))
+  :custom ((valign-fancy-bar t)))
+
 ;; let org mode exports code block with syntax highlighting
 (use-package htmlize)
+
+(use-package mu4e-dashboard
+  :straight nil
+  :load-path "~/.emacs.d/mu4e-dashboard/")
 
 ;; zetteldeft stuff:
 
@@ -158,7 +173,9 @@
 (defun my/org-yank-url-at-point ()
   "Yank the URL at point in a org buffer."
   (interactive)
-  (if-let (url (my/org-url-at-point))
-      (progn (kill-new url)
-             (message "Copied: %s" url))
-    (error "No URL at point")))
+  (let ((url (my/org-url-at-point)))
+    (unless url
+      (error "No URL at point"))
+    (kill-new url)
+    (message "Copied: %s" url)))
+
