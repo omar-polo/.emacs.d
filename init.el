@@ -769,8 +769,13 @@ _?_ toggle help    ^ ^                _-_   split vert.
   (require 'emms-setup)
   (emms-all)
   (emms-default-players)
+  (emms-playing-time-disable-display)
 
   (add-to-list 'emms-player-base-format-list "opus")
+
+  ;; save on quit and recover on startup
+  (require 'emms-history)
+  (emms-history-load)
 
   ;; use libtag to extract tracks info.
   ;;
@@ -782,10 +787,6 @@ _?_ toggle help    ^ ^                _-_   split vert.
   (setq emms-info-functions '(emms-info-libtag))
   (setq emms-info-libtag-known-extensions
         (regexp-opt '("opus" "mp3" "mp4" "m4a" "ogg" "flac" "spx" "wma")))
-
-  ;; save on quit and recover on startup
-  (require 'emms-history)
-  (emms-history-load)
 
   ;; use my backend for sndioctl
   (require 'emms-volume-sndioctl)
@@ -818,7 +819,7 @@ Modeled after `emms-player-pause'."
 
   (defun my/emms-toggle-time-display ()
     "Toggle the display of time information in the modeline"
-    (interactive "")
+    (interactive)
     (if emms-playing-time-display-p
         (emms-playing-time-disable-display)
       (emms-playing-time-enable-display)))
