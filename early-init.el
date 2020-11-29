@@ -38,11 +38,17 @@
 (require 'my-modeline)
 
 (defvar my/font "Iosevka Term Curly 10")
+(defvar my/variable-font "Input Serif Narrow 12")
+
+;; (setq my/font "Iosevka Term Curly 10")
 ;; (set-frame-font my/font)
-(add-to-list 'default-frame-alist `(font . ,my/font))
+;; (add-to-list 'default-frame-alist `(font . ,my/font))
+
+(set-face-attribute 'default nil :font my/font)
+(set-face-attribute 'variable-pitch nil :font "DejaVu Serif 11")
 
 ;; make some symbols, such as 📌, be non-tofu
-(set-fontset-font "fontset-default" 'unicode "Noto Emoji" nil 'prepend)
+;; (set-fontset-font "fontset-default" 'unicode "Noto Emoji" nil 'prepend)
 
 ;; Resizing the Emacs frame can be a terribly expensive part of
 ;; changing the font. By inhibiting this, we easily halve startup

@@ -534,6 +534,24 @@ _?_ toggle help    ^ ^                _-_   split vert.
         guess-language-languages '(en it)
         guess-language-min-paragraph-length 45))
 
+(use-package unicode-fonts
+  :config
+  (defun emagician/update-unicode-block-with-font (block font)
+    "Add FONT to BLOCK in `unicode-fonts-block-font-mapping."
+    (let ((b (assoc block unicode-fonts-block-font-mapping)))
+      (when (not b)
+        (error "Block %s not found!" block))
+      (setf (cdr b) (list (cons font (cadr b))))
+      b))
+
+  (emagician/update-unicode-block-with-font "Dingbats" "Noto Color Emoji")
+  (emagician/update-unicode-block-with-font "Emoticons" "Noto Color Emoji")
+  (emagician/update-unicode-block-with-font "Miscellaneous Symbols and Pictographs" "Noto Color Emoji")
+  (emagician/update-unicode-block-with-font "Transport and Map Symbols" "Noto Color Emoji")
+
+  ;; (setq unicode-fonts-setup-done nil)
+  (unicode-fonts-setup))
+
 (use-package term
   :straight nil
   :bind (:map term-raw-map
