@@ -8,16 +8,23 @@
   "Ignore everything in its BODY and return nil."
   ())
 
+;; fix elisp indentation
+(setq lisp-indent-function 'common-lisp-indent-function)
+(put 'cl-flet 'common-lisp-indent-function
+     (get 'flet 'common-lisp-indent-function))
+(put 'cl-labels 'common-lisp-indent-function
+     (get 'labels 'common-lisp-indent-function))
+(put 'if 'common-lisp-indent-function 2)
+(put 'dotimes-protect 'common-lisp-indent-function
+     (get 'when 'common-lisp-indent-function))
+(put 'cl-loop 'lisp-indent-function
+     nil)
+
 (defun my/auto-fill-comment ()
   "Enable auto filling for comments."
   (setq-local comment-auto-fill-only-comments t)
   (auto-fill-mode +1))
 (add-hook 'prog-mode-hook #'my/auto-fill-comment)
-
-(defun my/term ()
-  "Sensible wrapper for `ansi-term'."
-  (interactive)
-  (ansi-term (or (getenv "SHELL") "/bin/sh")))
 
 ;; improve mark-ring navigation.  After C-u C-<SPC> one can keep
 ;; pressing C-<SPC> to navigate the ring backwards, instead of C-u
@@ -78,10 +85,8 @@
 ;; more useful than zap-to-char
 (define-key global-map (kbd "M-z") #'zap-up-to-char)
 
-(define-key global-map (kbd "C-M-'") #'imenu)
 (define-key global-map (kbd "C-z") nil)
 (define-key global-map (kbd "C-M-/") #'dabbrev-expand)
-(define-key global-map (kbd "C-x C-b") #'ibuffer)
 (define-key global-map (kbd "<f6>") #'display-line-numbers-mode)
 
 (defun emc--move-text-impl (arg)
@@ -372,12 +377,150 @@ Originally from protesilaos' dotemacs."
     (when-let (b (completing-read "Bookmark:" (bookmark-all-names)))
       (bookmark-jump b))))
 
+(use-package bm
+  :hook ((after-init        . bm-repository-load)
+         (kill-buffer       . bm-buffer-save)
+         (kill-emacs        . my/bm-save-on-kill-emacs)
+         (after-save        . bm-buffer-save)
+         (find-file         . bm-buffer-restore)
+         (after-revert      . bm-buffer-restore)
+         (vc-before-checkin . bm-buffer-restore))
+  :bind (("C-c b" . my/hydra-bm/body)
+         ("<left-fringe> <mouse-5>" . bm-next-mouse)
+         ("<left-fringe> <mouse-4>" . bm-previous-mouse)
+         ("<left-fringe> <mouse-1>" . bm-toggle-mouse))
+  :commands (bm-toggle bm-next bm-previous)
+  :custom ((bm-repository-file "~/.emacs.d/bm-repository")
+           (bm-buffer-persistence t)
+           (bm-highlight-style 'bm-highlight-only-line))
+  :custom-face (bm-persistent-face
+                ((t (:inherit default
+                              :extend t
+                              :underline (:color "wheat"
+                                                 :style line)))))
+  :init
+  (setq bm-restore-repository-on-load t)
+  :config
+  (defhydra my/hydra-bm ()
+    "visual bookmarks"
+    ("q" nil)
+    ("t" bm-toggle :exit t)
+    ("n" bm-next)
+    ("p" bm-previous))
+
+  (defun my/bm-save-on-kill-emacs ()
+    "Save bm bookmarks when emacs exits."
+    (bm-buffer-save-all)
+    (bm-repository-save)))
+
 (use-package sam
   :straight nil
   :load-path "~/w/sam/master/")
 
+(use-package pixel-scroll
+  :straight nil
+  :custom ((pixel-dead-time 0)
+           (pixel-resolution-fine-flag t)
+           (mouse-wheel-scroll-amount '(1))
+           (mouse-wheel-progressive-speed nil)
+           (fast-but-imprecise-scrolling t)))
+
+(use-package eshell
+  :custom ((eshell-compl-dir-ignore
+            "\\`\\(\\.\\.?\\|CVS\\|\\.svn\\|\\.git\\|\\.got\\)/\\'")
+           (eshell-save-history-on-exit t)))
+
+(use-package term
+  :straight nil
+  :bind (:map term-raw-map
+              ("C-c C-y" . term-paste)
+              ("M-o" . ace-window))
+  :commands (term-mode term)
+  :config
+  (defun my/term-exec-hook ()
+    "Kill term buffer after the shell is closed.  Taken from oremacs."
+    (let* ((buf (current-buffer))
+           (proc (get-buffer-process buf)))
+      (set-process-sentinel
+       proc
+       (lambda (process event)
+         (if (string= event "finished\n")
+             (kill-buffer buf))))))
+  (add-hook 'term-exec-hook 'my/term-exec-hook)
+
+  (defun my/term ()
+    "Sensible wrapper for `ansi-term'."
+    (interactive)
+    (ansi-term (or (getenv "SHELL") "/bin/sh"))))
+
+(use-package vterm
+  :bind (:map vterm-mode-map
+              ("<C-backspace>" . my/vterm-fix-c-backspace)
+              ("C-c M-t" . vterm-copy-mode))
+  :custom ((vterm-buffer-name-string "*vterm %s*"))
+  :commands (my/standalone-vterm)
+  :config
+  (defun my/vterm-fix-c-backspace ()
+    (interactive)
+    (vterm-send-key (kbd "C-w")))
+
+  (defvar *my/hostname* (with-temp-buffer
+                          (process-file "hostname"
+                                        nil
+                                        (current-buffer))
+                          (string-trim (buffer-string)
+                                       "" "\n"))
+    "The hostname of this machine.")
+
+  (define-prefix-command 'f5-term-map)
+  (global-set-key (kbd "<f5>") #'f5-term-map)
+
+  (cl-loop for (kbd . fn) in '(("<f5>" . vterm)
+                               ("V"    . my/side-vterm)
+                               ("v"    . my/project-vterm))
+           do (define-key f5-term-map (kbd kbd) fn))
+
+  (defun my/project-vterm ()
+    "Spawn a vterm in the current project."
+    (interactive)
+    (let* ((project-current (project-current))
+           (default-directory (if project-current
+                                  (project-root project-current)
+                                default-directory)))
+      (vterm)))
+
+  (defun my/side-vterm ()
+    "Spawn (or jump to) a vterm in the current project in a side window"
+    (interactive)
+    (let* ((project-current (project-current))
+           (default-directory (if project-current
+                                  (project-root project-current)
+                                default-directory))
+           (bufname (format "*vterm %s:%s*"
+                            *my/hostname*
+                            (string-trim-right
+                             (expand-file-name default-directory)
+                             "/")))
+           (buf (or (get-buffer bufname)
+                    (with-current-buffer (get-buffer-create bufname)
+                      (vterm-mode)
+                      (current-buffer)))))
+      (display-buffer-in-side-window
+       buf
+       (cddr (assoc "\\*ansi-term\\*" display-buffer-alist)))
+      (pop-to-buffer buf)))
+
+  (defun my/standalone-vterm ()
+    "Spawn a `vterm' in the `default-directory' and close the frame on exit."
+    (let ((buf (generate-new-buffer (generate-new-buffer-name "standalone vterm"))))
+      (with-current-buffer buf
+        (vterm-mode)
+        (add-hook 'vterm-exit-functions (lambda (_a _b)
+                                          (delete-frame))
+                  0 t))
+      (switch-to-buffer buf))))
+
 (use-package project
-  :bind ("<f5>" . my/project-spawn-term)
   :config
   (let ((map  (make-sparse-keymap))
         (keys '(("f" . project-find-file)
@@ -461,11 +604,11 @@ Originally from protesilaos' dotemacs."
       (side . bottom)
       (slot . 0)
       (window-parameters . ((no-delete-other-windows . t))))
-     ("\\*[Hh]elp\\*"
-      (display-buffer-in-side-window)
-      (window-width . 0.30)
-      (side . left)
-      (slot . 0))
+     ;; ("\\*[Hh]elp\\*"
+     ;;  (display-buffer-in-side-window)
+     ;;  (window-height . 0.30)
+     ;;  (side . top)
+     ;;  (slot . 0))
      ("\\*\\(Backtrace\\|Warnings\\|compilation\\|Compile-Log\\|Messages\\)\\*"
       (display-buffer-in-side-window)
       (window-height . 0.25)
@@ -580,6 +723,10 @@ With prefix argument ARG switches (or create) the nth side-term."
 (use-package saveplace
   :straight nil
   :config (save-place-mode 1))
+
+(use-package savehist
+  :straight nil
+  :config (savehist-mode))
 
 (use-package desktop
   :straight nil
@@ -702,9 +849,6 @@ _?_ toggle help    ^ ^                _-_   split vert.
   :straight nil
   :hook (text-mode . flyspell-mode))
 
-(use-package typo
-  :hook (text-mode . typo-mode))
-
 (use-package guess-language
   :hook (text-mode . guess-language-mode)
   :config
@@ -735,24 +879,6 @@ _?_ toggle help    ^ ^                _-_   split vert.
 
   ;; (setq unicode-fonts-setup-done nil)
   (unicode-fonts-setup))
-
-(use-package term
-  :straight nil
-  :bind (:map term-raw-map
-              ("C-c C-y" . term-paste)
-              ("M-o" . ace-window))
-  :commands (term-mode term)
-  :config
-  (defun my/term-exec-hook ()
-    "Kill term buffer after the shell is closed.  Taken from oremacs."
-    (let* ((buf (current-buffer))
-           (proc (get-buffer-process buf)))
-      (set-process-sentinel
-       proc
-       (lambda (process event)
-         (if (string= event "finished\n")
-             (kill-buffer buf))))))
-  (add-hook 'term-exec-hook 'my/term-exec-hook))
 
 (use-package keycast
   :commands (keycast-mode)
@@ -856,7 +982,7 @@ _+_: inc     _n_: next        _r_: repeat one [% s(my/tick-symbol emms-repeat-tr
 _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-playlist)]     _T_oggle only time
 ^ ^          _<_: seek bw     _#_: shuffle            _s_elect
 ^ ^          _>_: seek fw     _%_: sort               _g_oto EMMS buffer
-^ ^        _SPC_: play/pause
+^ ^        _SPC_: play/pause                        _l_yrics
 ^ ^        _DEL_: restart
   "
     ("+" emms-volume-raise)
@@ -879,12 +1005,42 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
     ("g" (progn (emms)
                 (with-current-emms-playlist
                   (emms-playlist-mode-center-current))))
+    ("l" my/emms-current-lyrics)
 
     ("q" nil :exit t)))
+
+(use-package versuri
+  :commands (my/emms-current-lyrics)
+  :config
+  (defun my/emms-current-lyrics ()
+    "Fetch and display the lyrics for the current playing song."
+    (interactive)
+    (let* ((playing (emms-playlist-current-selected-track))
+           (artist  (cdr (assoc 'info-artist playing)))
+           (title   (cdr (assoc 'info-title  playing))))
+      (versuri-lyrics (downcase artist) (downcase title)
+                      (lambda (lyrics)
+                        (with-current-buffer (get-buffer-create "*lyrics*")
+                          (let ((inhibit-read-only t))
+                            (erase-buffer)
+                            (insert lyrics)
+                            (goto-char (point-min))
+                            (hl-line-mode +1)
+                            (read-only-mode +1)
+                            (view-mode +1)))
+                        (pop-to-buffer "*lyrics*"))))))
 
 (use-package elpher
   :custom (elpher-ipv4-always t)
   :commands (elpher elpher-go elpher-jump))
+
+(use-package vc-got
+  :straight nil
+  :load-path "~/w/vc-got/"
+  :defer t
+  :init
+  (add-to-list 'vc-handled-backends 'Got)
+  (add-to-list 'vc-directory-exclusion-list ".got"))
 
 (use-package magit
   :commands (magit)
@@ -914,6 +1070,27 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
   :config (progn (setq ;; browse-url-browser-function 'eww-browse-url
                        url-cookie-trusted-urls nil
                        url-cookie-untrusted-urls '(".*"))))
+
+(use-package imenu
+  :bind ("C-M-'" . imenu)
+  :custom ((imenu-auto-rescan t)))
+
+(use-package ibuffer
+  :bind ("C-x C-b" . ibuffer))
+
+(comment
+ (use-package ibuffer-vc
+   :custom (ibuffer-formats '((mark modified read-only vc-status-mini " "
+                                    (name 18 18 :left :elide)
+                                    " "
+                                    (size 9 -1 :right)
+                                    " "
+                                    (mode 16 16 :left :elide)
+                                    " "
+                                    (vc-status 16 16 :left)
+                                    " "
+                                    filename-and-process)))
+   :hook (ibuffer-mode . ibuffer-vc-set-filter-groups-by-vc-root)))
 
 ;; (use-package webkit
 ;;   :load-path "~/build/emacs-webkit/")
@@ -949,9 +1126,21 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
                    (error (message "Missing rcirc configuration!")))))
 
 (use-package telega
+  :straight (:type git
+                   :flavor melpa
+                   :files (:defaults "etc" "server" "Makefile" "telega-pkg.el"
+                                     "contrib/ol-telega.el"
+                                     "contrib/telega-url-shorten.el")
+                   :branch "master"
+                   :host github
+                   :repo "zevlg/telega.el")
+  :after (selectrum)
+  :custom ((telega-chat-use-markdown-version 1)
+           (telega-completing-read-function completing-read-function))
   :hook ((telega-root-mode . telega-notifications-mode)
-         (telega-chat-mode . typo-mode)
-         (telega-chat-mode . my/telega-enable-company))
+         (telega-chat-mode . my/telega-enable-company)
+         (telega-load-hook . global-telega-url-shorten-mode))
+  :bind-keymap ("C-c t" . telega-prefix-map)
   :bind (:map telega-root-mode-map
               ("C-c C-b" . my/select-telega-chat)
               :map telega-chat-mode-map
@@ -1006,75 +1195,80 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
               (push-button)
               (when (= (point) (point-max))
                 (telega-chatbuf-recenter-1 nil))
-              (current-buffer))))))))
+              (current-buffer)))))))
+
+  ;; for telega-url-shorten
+  (use-package all-the-icons))
 
 (use-package elfeed
   :bind (("C-x w" . elfeed)
          :map elfeed-show-mode-map
          ("q" . delete-window))
-  :config (progn (setq elfeed-feeds
-                       '("https://undeadly.org/cgi?action=rss&full=yes&items=10"
-                         "http://www.tedunangst.com/flak/rss"
-                         "https://www.dragonflydigest.com/feed"
-                         "https://www.mirbsd.org/news.rss"
-                         "https://bentsukun.ch/index.xml"
-                         "https://drewdevault.com/feed.xml"
-                         "https://www.cambus.net/atom.xml"
-                         "https://dataswamp.org/~solene/rss.xml"
-                         "https://briancallahan.net/blog/feed.xml"
-                         "https://www.poolp.org/index.xml"
-                         "https://jcs.org/rss"
-                         "https://sanctum.geek.nz/arabesque/feed/"
-                         "https://tech.toryanderson.com/"
-                         "https://alexschroeder.ch/wiki?action=journal;search=-tag:rpg -tag:rsp;lang=en;title=English Diary without RPG Pages"
-                         "http://boston.conman.org/bostondiaries.rss"
-                         "https://emacsninja.com/feed.atom"
-                         "https://bsdly.blogspot.com/feeds/posts/default"
-                         "https://crawshaw.io/atom.xml"
-                         "https://nullprogram.com/feed/"
-                         "http://pragmaticemacs.com/feed/"
-                         "https://emacsnotes.wordpress.com/feed/"
-                         "https://metaredux.com/feed.xml"
-                         "https://emacsredux.com/atom.xml"
-                         "https://cestlaz.github.io/rss.xml"
-                         "https://utcc.utoronto.ca/~cks/space/blog/?atom"
-                         "https://irreal.org/blog/?feed=rss2"
-                         "https://insideclojure.org/feed.xml"
-                         "https://tech.toryanderson.com/index.xml"
-                         "https://vermaden.wordpress.com/feed/"
-                         "https://www.arp242.net/feed.xml"
-                         "https://tymoon.eu/api/reader/atom"
-                         "https://venam.nixers.net/blog/feed.xml"
-                         "https://www.omarpolo.com/rss.xml"
-                         "https://owarisubs.lacumpa.biz/feed/"
-                         "https://asenshi.moe/feed/"
-                         "https://godotengine.org/rss.xml"
-                         "https://github.com/yshui/picom/releases.atom"
-                         "https://github.com/vslavik/poedit/releases.atom"
-                         "https://github.com/TokTok/c-toxcore/releases.atom"))
+  :custom (elfeed-feeds '("https://undeadly.org/cgi?action=rss&full=yes&items=10"
+                          "http://www.tedunangst.com/flak/rss"
+                          "https://www.dragonflydigest.com/feed"
+                          "https://www.mirbsd.org/news.rss"
+                          "https://bentsukun.ch/index.xml"
+                          "https://drewdevault.com/feed.xml"
+                          "https://www.cambus.net/atom.xml"
+                          "https://dataswamp.org/~solene/rss.xml"
+                          "https://briancallahan.net/blog/feed.xml"
+                          "https://www.poolp.org/index.xml"
+                          "https://jcs.org/rss"
+                          "https://sanctum.geek.nz/arabesque/feed/"
+                          "https://tech.toryanderson.com/"
+                          "https://alexschroeder.ch/wiki?action=journal;search=-tag:rpg -tag:rsp;lang=en;title=English Diary without RPG Pages"
+                          "http://boston.conman.org/bostondiaries.rss"
+                          "https://emacsninja.com/feed.atom"
+                          "https://bsdly.blogspot.com/feeds/posts/default"
+                          "https://crawshaw.io/atom.xml"
+                          "https://nullprogram.com/feed/"
+                          "http://pragmaticemacs.com/feed/"
+                          "https://emacsnotes.wordpress.com/feed/"
+                          "https://metaredux.com/feed.xml"
+                          "https://emacsredux.com/atom.xml"
+                          "https://endlessparentheses.com/atom.xml"
+                          "https://www.masteringemacs.org/feed"
+                          "https://cestlaz.github.io/rss.xml"
+                          "https://utcc.utoronto.ca/~cks/space/blog/?atom"
+                          "https://irreal.org/blog/?feed=rss2"
+                          "https://planet.lisp.org/rss20.xml"
+                          "https://insideclojure.org/feed.xml"
+                          "https://tech.toryanderson.com/index.xml"
+                          "https://vermaden.wordpress.com/feed/"
+                          "https://www.arp242.net/feed.xml"
+                          "https://tymoon.eu/api/reader/atom"
+                          "https://venam.nixers.net/blog/feed.xml"
+                          "https://www.omarpolo.com/rss.xml"
+                          "https://owarisubs.lacumpa.biz/feed/"
+                          "https://asenshi.moe/feed/"
+                          "https://godotengine.org/rss.xml"
+                          "https://github.com/yshui/picom/releases.atom"
+                          "https://github.com/vslavik/poedit/releases.atom"
+                          "https://github.com/TokTok/c-toxcore/releases.atom"
+                          "https://github.com/alexander-akhmetov/python-telegram/releases.atom"
+                          "https://github.com/paul-nameless/tg/releases.atom"))
+  :config
+  (defun my/elfeed-display-buffer (buf &optional _act)
+    (pop-to-buffer buf)
+    (set-window-text-height (get-buffer-window)
+                            (round (* 0.7 (frame-height)))))
+  (setq elfeed-show-entry-switch 'my/elfeed-display-buffer)
 
-                 (defun my/elfeed-display-buffer (buf &optional _act)
-                   (pop-to-buffer buf)
-                   (set-window-text-height (get-buffer-window)
-                                           (round (* 0.7 (frame-height)))))
-                 (setq elfeed-show-entry-switch 'my/elfeed-display-buffer)
+  (defun my/elfeed-search-show-entry-pre (&optional lines)
+    "Returns a function to scroll forward or back in the elfeed search results, displaying entries without switching to them."
+    (lambda (times)
+      (interactive "p")
+      (forward-line (* times (or lines 0)))
+      (recenter)
+      (call-interactively 'elfeed-search-show-entry)
+      (select-window (previous-window))
+      (unless elfeed-search-remain-on-entry
+        (forward-line -1))))
 
-                 (defun my/elfeed-search-show-entry-pre (&optional lines)
-                   "Returns a function to scroll forward or back
-                   in the elfeed search results, displaying
-                   entries without switching to them"
-                   (lambda (times)
-                     (interactive "p")
-                     (forward-line (* times (or lines 0)))
-                     (recenter)
-                     (call-interactively 'elfeed-search-show-entry)
-                     (select-window (previous-window))
-                     (unless elfeed-search-remain-on-entry
-                       (forward-line -1))))
-
-                 (define-key elfeed-search-mode-map (kbd "n") (my/elfeed-search-show-entry-pre +1))
-                 (define-key elfeed-search-mode-map (kbd "p") (my/elfeed-search-show-entry-pre -1))
-                 (define-key elfeed-search-mode-map (kbd "M-RET") (my/elfeed-search-show-entry-pre))))
+  (define-key elfeed-search-mode-map (kbd "n") (my/elfeed-search-show-entry-pre +1))
+  (define-key elfeed-search-mode-map (kbd "p") (my/elfeed-search-show-entry-pre -1))
+  (define-key elfeed-search-mode-map (kbd "M-RET") (my/elfeed-search-show-entry-pre)))
 
 (comment
  (use-package projectile
@@ -1292,6 +1486,11 @@ Use as a value for `completion-in-region-function'."
  (use-package whole-line-or-region
    :config (whole-line-or-region-global-mode +1)))
 
+(use-package isearch
+  :straight nil
+  :custom ((isearch-lazy-count t)
+           (search-whitespace-regexp ".*?")))
+
 (use-package etags
   :straight nil
   ;; reload tags without asking
@@ -1307,22 +1506,29 @@ Use as a value for `completion-in-region-function'."
   (define-key yas-minor-mode-map (kbd "SPC") yas-maybe-expand)
 
   (defun my/inside-comment-or-string-p ()
-    "t if point is inside a string or comment."
+    "T if point is inside a string or comment."
     (let ((s (syntax-ppss)))
       (or (nth 4 s)                     ;comment
           (nth 3 s))))                  ;string
 
-  (defun my/yas-fix-local-condition (mode-hook)
-    "Add a hook to MODE-HOOK that sets (locally) `yas-buffer-local-condition' to TEST."
-    (add-hook mode-hook
-              (lambda ()
-                (setq yas-buffer-local-condition
-                      '(not (my/inside-comment-or-string-p))))))
+  (defun my/in-start-of-sexp-p ()
+    "T if point is after the first symbol in the list."
+    (ignore-errors
+      (save-excursion
+        (backward-char (length (current-word)))
+        (= ?\( (char-before)))))
 
-  (dolist (l '(emacs-lisp-mode-hook lisp-interaction-mode-hook
-                                    clojure-mode-hook
-                                    c-mode-hook))
-    (my/yas-fix-local-condition l)))
+  (defun my/yas-fix-local-condition ()
+    (setq yas-buffer-local-condition
+          '(not (or (my/inside-comment-or-string-p)
+                    (my/in-start-of-sexp-p)))))
+
+  (mapcar (lambda (mode-hook)
+            (add-hook mode-hook #'my/yas-fix-local-condition))
+          '(emacs-lisp-mode-hook
+            lisp-interaction-mode-hook
+            clojure-mode-hook
+            c-mode-hook)))
 
 (comment
  (use-package beacon
@@ -1519,12 +1725,12 @@ Use as a value for `completion-in-region-function'."
 (use-package sql
   :straight nil
   :hook ((sql-interactive-mode . toggle-truncate-lines)
-         (sql-mode . my/disable-electric-indent-mode))
+         (sql-mode . my/sql-sane-electric-indent-mode))
   :config
-  (defun my/disable-electric-indent-mode ()
-    "Disable `electric-indent-mode' locally."
+  (defun my/sql-sane-electric-indent-mode ()
+    "Fix `electric-indent-mode' behaviour locally."
     (interactive)
-    (electric-indent-local-mode -1)))
+    (setq electric-indent-inhibit nil)))
 
 (use-package sql-indent
   :hook ((sql-mode . sqlind-minor-mode)))
@@ -1586,6 +1792,11 @@ Use as a value for `completion-in-region-function'."
   :mode "\\.gd\\'"
   :hook ((gdscript-mode . my/enable-tabs))
   :custom (gdscript-gdformat-save-and-format t))
+
+(use-package elisp-mode
+  :straight nil
+  :bind (:map emacs-lisp-mode-map
+              ("C-c C-k" . eval-buffer)))
 
 (comment
  (use-package slime
@@ -1690,7 +1901,7 @@ a symbol if an argument is given, like `xref-find-definitions'
 does."
     (cond
      ((eql '- arg) (funcall fn '-  var line))
-     ((null arg)   (funcall fn 4   var line))
+     ((null arg)   (funcall fn '(4)   var line))
      (t            (funcall fn nil var line))))
   (advice-add 'cider-find-var :around #'my/cider-find-var)
 
@@ -1805,7 +2016,7 @@ Anyway, set forcefully `eldoc-documentation-function' to
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(custom-safe-themes
-   '("7aba25b0e38b789e5357dc9b68206060293072fdc3526cb873ae23fea49b79cd" "36a7407dd4f45368abcf4619b25b3af1bc2fdd86b2d7433647d702011d90c5bc" "491b9ce0a6522f80b6a65aeaa19e59580307d2ee5ff7b435382a4caa65a5141d" "66a62497a8c8cffdc823d883b83679e231b95040b10a4b38bdd4f647867b196a" "dd260b6a42d434555c875acb5bab468e54a0cdc666350c8bfa0ed0c8ed487551" "43371217d8e10b4a20aba538c5bb743f10e4d69467b2186576ff47e7fa045ad3" "57e9df4318e6465bd881861a681726501e593da567a16ede7fe63dadb7cb648f" "913516312ab3235a580b403283d5a8835dc601eb0239b224c6c27d35dc6b4f38" "5c0148e41b983f85ab41852d4ce227b957bb7a76bfe51d55184a42e5a8ba1a48" "1f143078ac1fa82ed6808cb8a83665405fefe4e0bfba3059f61d056961bc545a" "87bfa6720edbaf5e9a4483e6c730928e1e177888bbd8ec82059ad6c4f5846383" "57a365527f69e8c5dee8493f188bb6b9796b9f1abdd969dccc4ea8f4bad231e8" "ed7e3976ccb8646522faaa940ccaa2b02d85db1b794cbcd2076fb4590d39ebff" "ea48768f2373a093db258467b7303606b80ce693354eccc87c01374ce45dba48" "09c905d801be38dcd00e69f10751c884358e1c94a5b719ebe18770c6d751ef83" "35f8dfc576d5bf1e7016a20d9ceaa31907e632984705769479bb2592d2e2cf72" "ab4bfc1cdcd6deb99ddc2be8fc0fde03047ab9a8773dded828cdb65f1187372d" "f5a7b992f55e385f30ee40998f74b598849afbbf683eb1cd8b4e6418d637e228" "2a5da04924bdd20aefd78d5093afc07d76520f87f3317c4938bb8ce8e5fcf16f" "5c327f1e2ad451afb2cc1a9d6e33ba548c23be63f9142782880c7e3c7b4a0b44" "e0ca2751f3b849d4d54056312274d5f1aa39e56d2844a1d5797743feea98faa6" "b96f9d3af74bd6b758134c0f587e1e6b39cad97f9d709d033110795cb8da0b57" "c9b17602ab7063bbbcf99f3f74800eaa6e26beaa131a374937e28d381ca259c4" "12fc489c67eb874fead9221152564fd40b1ace698d861a13bfe0683afbdb66dc" "32a3e22993c122ffc0eb716d3013b94bb86044b2536d1b63780e13283f578e11" "33724fc2ebc6972567169cbfc54139ba5f334855d7e74fd0328312ed4f97fb2f" "7bdda6056822c9a8e6d1c72ffc340568f38c54ce1813f75ef01bb69e2f80f774" "8ceaf37709be42c21b3e74597c16ad2a1866a324710b74e3f7388ce8c050d2fa" "d20f39b2c961611e9d135d8e0e92b2444141253f59520063d1119746e202f192" "0e160aa1a035935ea1d70ae8d15e22eb01d9010aa2bec13e1cff50bdc5c04332" "51a10d605e1bc9f3a7912a547d2672d5ab6457e62a00a5e3f4873e6eeee1ffac" "576817b56acd8a77a3957312a14f90b1dad6c9d5e08c0f38b37f301dd8d302c2" "442d9c6c7ab6594bd5970b2d0ab4dd8185fb9602480b309d7326f536ff145e6d" "cc8f864bf528840e09a7e10642bb738dd6edf9ca747745c4a6c1840cd79e1298" "bfae9e706314f5b9da125bf62ba68016318c1d325fd73d05e4a92c664d2da43f" "140c6b56b2ba1fb48169434a1fd8a653922be7e2957da1ffed8cfc19fb90fc43" "0862fe9bb25b1cd6e59509d3ef1c492a1bf55aca50905b9d2109036e52044140" "1617cc7ae9d6e797ef064663e71ccd8af1c7d5a67604bcc33834f25d3be5da50" "ba31dc1c26401c5d5b35de655ea9d7aee9f21527328b54b4da6280c2460f4825" "3aeea09b1181f2a5f924e68a7933920cba06adf165e775883a98749ff57bb10a" "a6b553143cd8a024a045ceeca2c533941d877c8cc16f87ed5d1acdf0c5044bac" "b2f05f6e0fa42e08069f4737e0f7dd0d663c6e3934ba7a42673d1714f7d80400" "9bfd8e0624b0e8e0ba4203901bb58c41b927f8b251272acdcf517d707b5bbc2c" "e5f768c8bf5a5dd28a8b84655b3b5e872e120a75376c669c51805b22910084ca" "5cf82b1be04e91e7024e1934a7a909c124e8e6f2f85fddfacc9724d4ad2ec9b9" "878ddd87e7ecd070bd767237178f1061b01a1eb49afe23c4358499360888339b" "92181d614e1270ac76da6439cf6a14defc9dd16454e0130c8432896632e4c91c" "e240f6d5a8ccd4b2a09518f04ca97cf195f8f337463d62e7c8baa0d5ad40d22c" "5b794603fb798c6f1d57a9c3d5991ed8dd5d0071d1a97f106be4ca772c1d61e8" "5ed24c6f7d30af9c94dfc38fc0fce8ece61e250d5ae1f666d00ef1649dc703d3" "6543614e44b95523f05a0be1e96d78468751f173625b4732d7e99cbce959e312" "0258e7050ef41bbee17959af0cfe6b4e5d2c2e49439a08770ce8f88b202487e9" "c3d13cbba1d87983ef930cda55f08f99f0abb3a4c169446f11141ed19b4af1e6" "b4de17f7a20bd9966e7752a75129df10f33b9a53319de3f1fd48c9fec9806207" "e0b2ad54031a49dd054da83287273f03536c160a2dde832f442e639122add22d" "f6686e892fc9ae1e2c6c447a7bbc4f431e9b28420689eaf01b6fba756ea5f475" "5ded9878f4a765e741f400c081ab4d8c88c78e2c0f44db5c28d4c22fb41526a6" "006a5cbca622bfa20c238c6e7f6856f052cb612381d45c0061c67d1b08b89d2d" "19fb1be04e066c498d6c674b4e61fc922c6467017ec130b5fe2f2e1646c472e9" "b611d0a5e5c71d6ce316588651f0b49c52702e98cfa95795c103fcea60a520e1" "af08c8e7732e89201fd463b3a04d1d57fecb549bf1a191195911dbe58548fb8d" "f4560d1069f889dfef0a7a2b34d6360ad1a0dd1ec80993eb56805cd06121eff5" "410201c91ed9820590f435cca51305cc83c0c900f2ff63ccd08c526e5b453d8c" "9b2818eb1152a37d9d839371473a7446b441e4360ecdd9a9a1fba72dec24c354" "1fafb9b13aadb96480014b871909a26d46c4ee9c3a57b4efea1e6a688e085451" "2b3d504022714945368ef382df8fe9c1929268f9ad49d889e30c8d5244ec8c9e" "fdfaae66c6bc93872c3e4abeb9488a926bf2fba148889a388a75d5fe81fbf44b" "d6d7f76ed646e3b4c8d11dcf004d628cee7b2900aea3c2a63474a0deaa567dd3" "564abaa9051df8d499ab08efb6830a0da279521f1bae39b4d5c99326179e651c" "2386aa5a90d6d6ae25f8c9bb3081c99bebe10622e470408e57d59e95f2902e68" "7168cb6c66db59aefaf58358d192ab8a8f60a6e50b6c2eedb239ff751cc0ed7f" default))
+   '("88ca45ddc278fd5e14f1f5449b7a48098866fd21f6eb4f44f1e68765688f5aac" "7aba25b0e38b789e5357dc9b68206060293072fdc3526cb873ae23fea49b79cd" "36a7407dd4f45368abcf4619b25b3af1bc2fdd86b2d7433647d702011d90c5bc" "491b9ce0a6522f80b6a65aeaa19e59580307d2ee5ff7b435382a4caa65a5141d" "66a62497a8c8cffdc823d883b83679e231b95040b10a4b38bdd4f647867b196a" "dd260b6a42d434555c875acb5bab468e54a0cdc666350c8bfa0ed0c8ed487551" "43371217d8e10b4a20aba538c5bb743f10e4d69467b2186576ff47e7fa045ad3" "57e9df4318e6465bd881861a681726501e593da567a16ede7fe63dadb7cb648f" "913516312ab3235a580b403283d5a8835dc601eb0239b224c6c27d35dc6b4f38" "5c0148e41b983f85ab41852d4ce227b957bb7a76bfe51d55184a42e5a8ba1a48" "1f143078ac1fa82ed6808cb8a83665405fefe4e0bfba3059f61d056961bc545a" "87bfa6720edbaf5e9a4483e6c730928e1e177888bbd8ec82059ad6c4f5846383" "57a365527f69e8c5dee8493f188bb6b9796b9f1abdd969dccc4ea8f4bad231e8" "ed7e3976ccb8646522faaa940ccaa2b02d85db1b794cbcd2076fb4590d39ebff" "ea48768f2373a093db258467b7303606b80ce693354eccc87c01374ce45dba48" "09c905d801be38dcd00e69f10751c884358e1c94a5b719ebe18770c6d751ef83" "35f8dfc576d5bf1e7016a20d9ceaa31907e632984705769479bb2592d2e2cf72" "ab4bfc1cdcd6deb99ddc2be8fc0fde03047ab9a8773dded828cdb65f1187372d" "f5a7b992f55e385f30ee40998f74b598849afbbf683eb1cd8b4e6418d637e228" "2a5da04924bdd20aefd78d5093afc07d76520f87f3317c4938bb8ce8e5fcf16f" "5c327f1e2ad451afb2cc1a9d6e33ba548c23be63f9142782880c7e3c7b4a0b44" "e0ca2751f3b849d4d54056312274d5f1aa39e56d2844a1d5797743feea98faa6" "b96f9d3af74bd6b758134c0f587e1e6b39cad97f9d709d033110795cb8da0b57" "c9b17602ab7063bbbcf99f3f74800eaa6e26beaa131a374937e28d381ca259c4" "12fc489c67eb874fead9221152564fd40b1ace698d861a13bfe0683afbdb66dc" "32a3e22993c122ffc0eb716d3013b94bb86044b2536d1b63780e13283f578e11" "33724fc2ebc6972567169cbfc54139ba5f334855d7e74fd0328312ed4f97fb2f" "7bdda6056822c9a8e6d1c72ffc340568f38c54ce1813f75ef01bb69e2f80f774" "8ceaf37709be42c21b3e74597c16ad2a1866a324710b74e3f7388ce8c050d2fa" "d20f39b2c961611e9d135d8e0e92b2444141253f59520063d1119746e202f192" "0e160aa1a035935ea1d70ae8d15e22eb01d9010aa2bec13e1cff50bdc5c04332" "51a10d605e1bc9f3a7912a547d2672d5ab6457e62a00a5e3f4873e6eeee1ffac" "576817b56acd8a77a3957312a14f90b1dad6c9d5e08c0f38b37f301dd8d302c2" "442d9c6c7ab6594bd5970b2d0ab4dd8185fb9602480b309d7326f536ff145e6d" "cc8f864bf528840e09a7e10642bb738dd6edf9ca747745c4a6c1840cd79e1298" "bfae9e706314f5b9da125bf62ba68016318c1d325fd73d05e4a92c664d2da43f" "140c6b56b2ba1fb48169434a1fd8a653922be7e2957da1ffed8cfc19fb90fc43" "0862fe9bb25b1cd6e59509d3ef1c492a1bf55aca50905b9d2109036e52044140" "1617cc7ae9d6e797ef064663e71ccd8af1c7d5a67604bcc33834f25d3be5da50" "ba31dc1c26401c5d5b35de655ea9d7aee9f21527328b54b4da6280c2460f4825" "3aeea09b1181f2a5f924e68a7933920cba06adf165e775883a98749ff57bb10a" "a6b553143cd8a024a045ceeca2c533941d877c8cc16f87ed5d1acdf0c5044bac" "b2f05f6e0fa42e08069f4737e0f7dd0d663c6e3934ba7a42673d1714f7d80400" "9bfd8e0624b0e8e0ba4203901bb58c41b927f8b251272acdcf517d707b5bbc2c" "e5f768c8bf5a5dd28a8b84655b3b5e872e120a75376c669c51805b22910084ca" "5cf82b1be04e91e7024e1934a7a909c124e8e6f2f85fddfacc9724d4ad2ec9b9" "878ddd87e7ecd070bd767237178f1061b01a1eb49afe23c4358499360888339b" "92181d614e1270ac76da6439cf6a14defc9dd16454e0130c8432896632e4c91c" "e240f6d5a8ccd4b2a09518f04ca97cf195f8f337463d62e7c8baa0d5ad40d22c" "5b794603fb798c6f1d57a9c3d5991ed8dd5d0071d1a97f106be4ca772c1d61e8" "5ed24c6f7d30af9c94dfc38fc0fce8ece61e250d5ae1f666d00ef1649dc703d3" "6543614e44b95523f05a0be1e96d78468751f173625b4732d7e99cbce959e312" "0258e7050ef41bbee17959af0cfe6b4e5d2c2e49439a08770ce8f88b202487e9" "c3d13cbba1d87983ef930cda55f08f99f0abb3a4c169446f11141ed19b4af1e6" "b4de17f7a20bd9966e7752a75129df10f33b9a53319de3f1fd48c9fec9806207" "e0b2ad54031a49dd054da83287273f03536c160a2dde832f442e639122add22d" "f6686e892fc9ae1e2c6c447a7bbc4f431e9b28420689eaf01b6fba756ea5f475" "5ded9878f4a765e741f400c081ab4d8c88c78e2c0f44db5c28d4c22fb41526a6" "006a5cbca622bfa20c238c6e7f6856f052cb612381d45c0061c67d1b08b89d2d" "19fb1be04e066c498d6c674b4e61fc922c6467017ec130b5fe2f2e1646c472e9" "b611d0a5e5c71d6ce316588651f0b49c52702e98cfa95795c103fcea60a520e1" "af08c8e7732e89201fd463b3a04d1d57fecb549bf1a191195911dbe58548fb8d" "f4560d1069f889dfef0a7a2b34d6360ad1a0dd1ec80993eb56805cd06121eff5" "410201c91ed9820590f435cca51305cc83c0c900f2ff63ccd08c526e5b453d8c" "9b2818eb1152a37d9d839371473a7446b441e4360ecdd9a9a1fba72dec24c354" "1fafb9b13aadb96480014b871909a26d46c4ee9c3a57b4efea1e6a688e085451" "2b3d504022714945368ef382df8fe9c1929268f9ad49d889e30c8d5244ec8c9e" "fdfaae66c6bc93872c3e4abeb9488a926bf2fba148889a388a75d5fe81fbf44b" "d6d7f76ed646e3b4c8d11dcf004d628cee7b2900aea3c2a63474a0deaa567dd3" "564abaa9051df8d499ab08efb6830a0da279521f1bae39b4d5c99326179e651c" "2386aa5a90d6d6ae25f8c9bb3081c99bebe10622e470408e57d59e95f2902e68" "7168cb6c66db59aefaf58358d192ab8a8f60a6e50b6c2eedb239ff751cc0ed7f" default))
  '(debug-on-error nil)
  '(safe-local-variable-values
    '((sly-port . 4004)
@@ -1867,7 +2078,8 @@ Anyway, set forcefully `eldoc-documentation-function' to
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(aw-leading-char-face ((t (:inherith ace-jump-face-foreground :height 3.0)))))
+ '(aw-leading-char-face ((t (:inherith ace-jump-face-foreground :height 3.0))))
+ '(bm-persistent-face ((t (:inherit default :extend t :underline (:color "wheat" :style line))))))
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-page 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
