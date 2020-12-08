@@ -31,7 +31,7 @@
 
 (let* ((class '((class color) (min-colors 89)))
        (foreground "#586e75")
-       (background "#fdf6e3")
+       (background "#ffffff") ;; "#fdf6e3"
        (cursor "#333")
        (border "grey90")
        (minibuffer cursor)
