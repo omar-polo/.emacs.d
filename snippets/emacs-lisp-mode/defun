@@ -2,8 +2,15 @@
 # name: defun
 # key: defun
 # --
-
-(defun ${1:fun} (${2:args})${3:${4:
-  "${5:docstring}"}
-  ${6:(interactive${7: "${8:P}"})}}
+(defun `(cl-flet ((special-p (x)
+                    (or (string-prefix-p "*" x)
+                        (string= "init.el" x)))
+                  (get-ns (x)
+                    (string-remove-suffix ".el" x)))
+          (let ((n (file-relative-name (buffer-file-name))))
+            (if (special-p n)
+                "my/"
+              (concat (get-ns n) "-"))))`${1:fun} (${2:args})${3:${4:
+  "${5:docstring}"}${6:
+  (interactive${7: "${8:P}"})}}
   `yas-selected-text`$0)

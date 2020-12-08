@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: <itembr
+# key: <itembr
+# --
+** Item
+   :PROPERTIES:
+   :ANKI_NOTE_TYPE: Basic (and reversed card)
+   :END:
+*** Front
+    ${1}
+*** Back
+    ${0}

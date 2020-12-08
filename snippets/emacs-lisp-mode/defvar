@@ -2,5 +2,13 @@
 # name: defvar
 # key: defvar
 # --
-(defvar ${1:symbol} ${2:initvalue}
+(defvar `(cl-flet ((special-p (x)
+                    (or (string-prefix-p "*" x)
+                        (string= "init.el" x)))
+                  (get-ns (x)
+                    (string-remove-suffix ".el" x)))
+           (let ((n (file-relative-name (buffer-file-name))))
+             (if (special-p n)
+                 "my/"
+               (concat (get-ns n) "-"))))`${1:symbol} ${2:initvalue}
   "${3:docstring}")
