@@ -15,7 +15,8 @@
   :hook ((org-mode . variable-pitch-mode)
          (org-mode . visual-line-mode)
          (org-mode . olivetti-mode)
-         (org-mode . org-num-mode))
+         ;; (org-mode . org-num-mode)
+         )
   :bind (("C-c c" . org-capture)
          ("C-c a" . org-agenda)
          :map org-src-mode-map
@@ -23,6 +24,8 @@
          ("C-x C-s" . org-edit-src-exit))
   :config
   (setq
+
+   org-startup-folded t
 
    ;; enable styling for quote and verse blocks
    org-fontify-quote-and-verse-blocks t
@@ -178,6 +181,23 @@
       (error "No URL at point"))
     (kill-new url)
     (message "Copied: %s" url)))
+
+(use-package anki-editor
+  :after org
+  ;; :bind (:map org-mode-map
+  ;;             ("<f12>" . anki-editor-cloze-region-auto-incr)
+  ;;             ("<f11>" . anki-editor-cloze-region-dont-incr)
+  ;;             ("<f10>" . anki-editor-rese-cloze-number)
+  ;;             ("<f9>"  . anki-editor-push-tree))
+  :custom ((anki-editor-create-decks t "create new deck if it doesn't exists")
+           (anki-editor-org-tags-as-anki-tags t))
+  ;; :hook (org-capture-after-finalize . anki-editor-reset-cloze-number)
+  :config
+  (comment
+   (defun anki-editor-cloze-region-auto-incr (&optional arg)
+     "Cloze region without hint and increase card number"
+     (interactive)
+     (anki-editor-cloze-region my-anki-editor-cloze-number ""))))
 
 (comment
  ;; fix org num after desktop
