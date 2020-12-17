@@ -201,7 +201,10 @@
                                              :foreground ,comment))))
      `(telega-msg-user-title ((,class (:inherit telega-msg-heading))))
      `(telega-msg-inline-reply ((,class (:inherit telega-msg-heading
-                                                  :slant italic))))))
+                                                  :slant italic))))
+
+     ;; objed
+     `(objed-hl ((,class (:background ,region))))))
 
 ;;;###autoload
 (when (and (boundp 'custom-theme-load-path) load-file-name)
