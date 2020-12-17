@@ -3,11 +3,14 @@
 # key: defun
 # --
 (defun `(cl-flet ((special-p (x)
-                    (or (string-prefix-p "*" x)
-                        (string= "init.el" x)))
+                    (or (null x)
+                        (string-prefix-p "*" x)
+                        (string= "init.el" x)
+                        (string= ".emacs" x)))
                   (get-ns (x)
                     (string-remove-suffix ".el" x)))
-          (let ((n (file-relative-name (buffer-file-name))))
+          (let ((n (when-let (name (buffer-file-name))
+                     (file-relative-name name))))
             (if (special-p n)
                 "my/"
               (concat (get-ns n) "-"))))`${1:fun} (${2:args})${3:${4:
