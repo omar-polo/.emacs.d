@@ -8,28 +8,11 @@
   "Ignore everything in its BODY and return nil."
   ())
 
-;; fix elisp indentation
-(setq lisp-indent-function 'common-lisp-indent-function)
-(put 'cl-flet 'common-lisp-indent-function
-     (get 'flet 'common-lisp-indent-function))
-(put 'cl-labels 'common-lisp-indent-function
-     (get 'labels 'common-lisp-indent-function))
-(put 'if 'common-lisp-indent-function 2)
-(put 'dotimes-protect 'common-lisp-indent-function
-     (get 'when 'common-lisp-indent-function))
-(put 'cl-loop 'lisp-indent-function
-     nil)
-
 (defun my/auto-fill-comment ()
   "Enable auto filling for comments."
   (setq-local comment-auto-fill-only-comments t)
   (auto-fill-mode +1))
 (add-hook 'prog-mode-hook #'my/auto-fill-comment)
-
-;; improve mark-ring navigation.  After C-u C-<SPC> one can keep
-;; pressing C-<SPC> to navigate the ring backwards, instead of C-u
-;; C-<SPC> again.
-(setq set-mark-command-repeat-pop t)
 
 (autoload 'ffap-file-at-point "ffap")
 (defun my/complete-path-at-point+ ()
@@ -243,7 +226,7 @@ Taken from endless parentheses."
         (t (narrow-to-defun))))
 (define-key global-map (kbd "C-c w") 'my/narrow-or-widen-dwim)
 
-(defmacro my/deftranspose (name scope &optional doc key)
+(defmacro my/deftranspose (name scope key doc)
   "Macro to produce transposition functions.
 NAME is the function's symbol.  SCOPE is the text object to
 operate on.  Optional DOC is the function's docstring.
@@ -267,25 +250,22 @@ Originally from protesilaos' dotemacs."
      ,(when key
         `(define-key global-map (kbd ,key) #',name))))
 
-(my/deftranspose my/transpose-lines "lines"
-  "Transpose lines or swap over active region."
-  "C-x C-t")
+(my/deftranspose my/transpose-lines "lines" "C-x C-t"
+  "Transpose lines or swap over active region.")
 
-(my/deftranspose my/transpose-paragraphs "paragraphs"
-  "Transpose paragraph or swap over active region."
-  "C-S-t")
+(my/deftranspose my/transpose-paragraphs "paragraphs" "C-S-t"
+  "Transpose paragraph or swap over active region.")
 
-(my/deftranspose my/transpose-sentences "sentences"
-  "Transpose sentences or swap over active region."
-  "C-x M-t")
+(my/deftranspose my/transpose-sentences "sentences" "C-x M-t"
+  "Transpose sentences or swap over active region.")
 
-(my/deftranspose my/transpose-sexps "sexps"
-  "Transpose sexps or swap over active region."
-  "C-M-t")
+(my/deftranspose my/transpose-sexps "sexps" "C-M-t"
+  "Transpose sexps or swap over active region.")
 
-(my/deftranspose my/transpose-words "words"
-  "Transpose words or swap over active region."
-  "M-t")
+(my/deftranspose my/transpose-words "words" "M-t"
+  "Transpose words or swap over active region.")
+
+(define-key global-map (kbd "C-x C-M-t") #'transpose-regions)
 
 ;; setup for packages
 (setq straight-use-package-by-default t)
@@ -309,6 +289,12 @@ Originally from protesilaos' dotemacs."
   :custom ((require-final-newline t)
            (visible-bell nil)
            (load-prefer-newer t)))
+
+(defun my/tigervnc->chiaki ()
+  "Connects to chiaki over tigervnc."
+  (interactive)
+  (async-shell-command "vncviewer.tigervnc 192.168.1.11"))
+(define-key global-map (kbd "C-z a v") #'my/tigervnc->chiaki)
 
 (use-package emacs
   ;; hyper stuff!!!
@@ -415,7 +401,8 @@ Originally from protesilaos' dotemacs."
 
 (use-package sam
   :straight nil
-  :load-path "~/w/sam/master/")
+  :load-path "~/w/sam/master/"
+  :commands (sam))
 
 (use-package pixel-scroll
   :straight nil
@@ -457,6 +444,7 @@ Originally from protesilaos' dotemacs."
   :bind (:map vterm-mode-map
               ("<C-backspace>" . my/vterm-fix-c-backspace)
               ("C-c M-t" . vterm-copy-mode))
+  :bind-keymap ("<f5>" . f5-term-map)
   :custom ((vterm-buffer-name-string "*vterm %s*"))
   :commands (my/standalone-vterm)
   :config
@@ -580,7 +568,9 @@ Originally from protesilaos' dotemacs."
   ;; to fetch the right configuration for the window in custom
   ;; display-buffer-in-side-window
   (display-buffer-alist
-   `(("\\*ansi-term\\*"
+   `(("\\*Async Shell Command\\*"
+      (display-buffer-no-window))
+     ("\\*ansi-term\\*"
       (display-buffer-in-side-window)
       (window-height . 0.25)
       (side . bottom)
@@ -1010,8 +1000,8 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
     ("q" nil :exit t)))
 
 (use-package versuri
-  :commands (my/emms-current-lyrics)
-  :config
+  :init
+  (autoload 'versuri-lyrics "versuri")
   (defun my/emms-current-lyrics ()
     "Fetch and display the lyrics for the current playing song."
     (interactive)
@@ -1042,18 +1032,6 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
   (add-to-list 'vc-handled-backends 'Got)
   (add-to-list 'vc-directory-exclusion-list ".got"))
 
-(use-package magit
-  :commands (magit)
-  :bind ("C-x g" . magit))
-
-(use-package forge
-  :after (magit))
-
-(comment
- (use-package md4rd
-   :commands (md4rd md4rd-login)
-   :config (md4rd--oauth-fetch-refresh-token)))
-
 ;; defer loading of both org and mu4e stuff
 (comment
  (run-with-idle-timer 1 nil
@@ -1067,9 +1045,8 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
 (use-package eww
   :straight nil
   :bind ("<f9>" . browse-web)
-  :config (progn (setq ;; browse-url-browser-function 'eww-browse-url
-                       url-cookie-trusted-urls nil
-                       url-cookie-untrusted-urls '(".*"))))
+  :custom ((url-cookie-trusted-urls nil)
+	   (url-cookie-untrusted-urls '(".*"))))
 
 (use-package imenu
   :bind ("C-M-'" . imenu)
@@ -1077,20 +1054,6 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
 
 (use-package ibuffer
   :bind ("C-x C-b" . ibuffer))
-
-(comment
- (use-package ibuffer-vc
-   :custom (ibuffer-formats '((mark modified read-only vc-status-mini " "
-                                    (name 18 18 :left :elide)
-                                    " "
-                                    (size 9 -1 :right)
-                                    " "
-                                    (mode 16 16 :left :elide)
-                                    " "
-                                    (vc-status 16 16 :left)
-                                    " "
-                                    filename-and-process)))
-   :hook (ibuffer-mode . ibuffer-vc-set-filter-groups-by-vc-root)))
 
 ;; (use-package webkit
 ;;   :load-path "~/build/emacs-webkit/")
@@ -1126,6 +1089,7 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
                    (error (message "Missing rcirc configuration!")))))
 
 (use-package telega
+  ;; standard recipe doesn't include the contrib/* stuff
   :straight (:type git
                    :flavor melpa
                    :files (:defaults "etc" "server" "Makefile" "telega-pkg.el"
@@ -1134,9 +1098,9 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
                    :branch "master"
                    :host github
                    :repo "zevlg/telega.el")
-  :after (selectrum)
   :custom ((telega-chat-use-markdown-version 1)
-           (telega-completing-read-function completing-read-function))
+           (telega-use-images t)
+           (telega-emoji-font-family "Noto Color Emoji"))
   :hook ((telega-root-mode . telega-notifications-mode)
          (telega-chat-mode . my/telega-enable-company)
          (telega-load-hook . global-telega-url-shorten-mode))
@@ -1148,6 +1112,11 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
               :map image-mode-map
               ("C-c C-b" . my/send-photo-with-telega))
   :config
+  ;; if put in the :custom will fail, and now I have other things to
+  ;; do.
+  (with-eval-after-load 'selectrum
+    (setq telega-completing-read-function #'completing-read))
+
   (defun my/telega-enable-company ()
     (interactive)
     (company-mode +1)
@@ -1270,35 +1239,6 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
   (define-key elfeed-search-mode-map (kbd "p") (my/elfeed-search-show-entry-pre -1))
   (define-key elfeed-search-mode-map (kbd "M-RET") (my/elfeed-search-show-entry-pre)))
 
-(comment
- (use-package projectile
-   :bind-keymap (("C-c p" . projectile-command-map)
-                 ("s-p"   . projectile-command-map))
-   :config
-   (setq projectile-completion-system 'default
-         projectile-enable-caching nil)
-
-   (defun my/projectile-run-term (arg)
-     "Invoke `term' in hte project's root or switch to it if already exists.
-
-Use a prefix argument ARG to indicate the creation of a new process instead."
-     (interactive "P")
-     (let ((project (projectile-ensure-project (projectile-project-root)))
-           (buffer-name (projectile-generate-process-name "term" arg))
-           (cmd (or explicit-shell-file-name
-                    (getenv "ESHELL")
-                    (getenv "SHELL")
-                    "/bin/sh")))
-       (unless (get-buffer buffer-name)
-         (require 'term)
-         (projectile-with-default-dir project
-                                      (set-buffer (term-ansi-make-term buffer-name cmd))
-                                      (term-mode)
-                                      (term-char-mode)))
-       (switch-to-buffer buffer-name)))
-
-   (define-key projectile-command-map (kbd "x t") #'my/projectile-run-term)))
-
 (use-package company
   :bind (:map company-active-map
               ("C-n" . company-select-next)
@@ -1325,7 +1265,8 @@ Use a prefix argument ARG to indicate the creation of a new process instead."
             (icomplete-show-matches-on-no-input t)
             (enable-recursive-minibuffers t)
             (icomplete-max-delay-chars 1)
-            (icomplete-compute-delay 0.4))
+            (icomplete-compute-delay 0.4)
+            (completion-in-region-function #'contrib/completing-read-in-region))
    :config
    (icomplete-mode)
    (icomplete-vertical-mode)
@@ -1347,118 +1288,73 @@ Use as a value for `completion-in-region-function'."
                            (t (completing-read
                                "Completion: " collection predicate t initial)))))
          (if (null completion)
-             (progn (message "No completion") nil)
+             (progn (message "No completion")
+                    nil)
            (delete-region start end)
            (insert completion)
-           t))))
-   (setq completion-in-region-function #'contrib/completing-read-in-region))
+           t)))))
 
  (use-package orderless
    :custom ((orderless-matching-styles '(orderless-literal))
             (completion-styles '(orderless partial-completion)))))
 
 (use-package selectrum
-  :bind (("C-M-y" . my/yank-pop)
-         ("C-M-s" . my/selectrum-swiper))
   :custom (enable-recursive-minibuffers t)
   :config
-  (selectrum-mode +1)
-
-  (defun my/yank-pop ()
-    "Offer a way to pick an element from the `kill-ring' using `completing-read'.  Adapted from yank-pop+ from selectrum wiki."
-    (interactive)
-    (let* ((old-last-command last-command)
-           (text (completing-read
-                  "Yank: "
-                  (cl-remove-duplicates kill-ring :test #'string= :from-end t)
-                  nil t nil nil))
-           (pos (cl-position text kill-ring :test #'string=))
-           (n (+ pos (length kill-ring-yank-pointer))))
-      (unless (string= text (current-kill n t))
-        (error "Could not set up for `current-kill'"))
-      (setq last-command old-last-command)
-      (if (eq last-command 'yank)
-          (yank-pop n)
-        (insert-for-yank text))))
-
-  (defvar my/selectrum-swiper-history nil
-    "Submission history for `my/selectrum-swiper'.")
-
-  (defun my/selectrum-swiper ()
-    "Search for a matching line and jump to the beginning of its text.  Obeys narrowing."
-    (interactive)
-    (let* ((selectrum-should-sort-p nil)
-           ;; Get the current line number for determining the travel distance.
-           (current-line-number (line-number-at-pos (point) t))
-
-           (default-cand-and-line-choices
-             (cl-loop
-              with minimum-line-number = (line-number-at-pos (point-min) t)
-              with buffer-text-lines = (split-string (buffer-string) "\n")
-              with number-format = (concat
-                                    "L%0"
-                                    (number-to-string
-                                     (length (number-to-string
-                                              (length buffer-text-lines))))
-                                    "d: ")
-
-              with closest-candidate = nil
-              with distance-to-current-line = nil
-              with smallest-distance-to-current-line = most-positive-fixnum
-
-              with formatted-line = nil
-              with formatted-lines = nil
-
-              for txt in buffer-text-lines
-              for num = minimum-line-number then (1+ num)
-              unless (string-empty-p txt) ; Just skip empty lines.
-              do
-              (setq formatted-line (propertize
-                                    txt
-                                    'selectrum-candidate-display-prefix
-                                    (propertize
-                                     (format number-format num)
-                                     'face 'completions-annotations)
-                                    'line-num num)
-                    distance-to-current-line (abs (- current-line-number num)))
-              (push formatted-line formatted-lines)
-              (when (< distance-to-current-line
-                       smallest-distance-to-current-line)
-                (setq smallest-distance-to-current-line distance-to-current-line
-                      closest-candidate formatted-line))
-              finally return (cons closest-candidate
-                                   (nreverse formatted-lines))))
-           (default-cand (car default-cand-and-line-choices))
-           (line-choices (cdr default-cand-and-line-choices))
-
-           ;; Get the matching line.
-           (chosen-line (selectrum-read "Jump to matching line: "
-                                        line-choices
-                                        :default-candidate default-cand
-                                        :history 'my/selectrum-swiper-history
-                                        :require-match t
-                                        :no-move-default-candidate t))
-
-           (chosen-line-number (get-text-property 0 'line-num chosen-line)))
-
-      (push-mark (point) t)
-      (forward-line (- chosen-line-number current-line-number))
-      (beginning-of-line-text 1))))
+  (selectrum-mode +1))
 
 (use-package selectrum-prescient
-  :config (progn
-            (selectrum-prescient-mode +1)
-            (prescient-persist-mode +1)))
+  :config
+  (selectrum-prescient-mode +1)
+  (prescient-persist-mode +1))
 
 (use-package embark
   :straight (:type git :host github :repo "oantolin/embark")
-  :bind (:map selectrum-minibuffer-map
+  :bind (:map minibuffer-local-completion-map
+              ("M-t" . embark-act-noexit)
+              ("M-S-t" . embark-act)
+              :map minibuffer-local-map
               ("M-t" . embark-act-noexit)
               ("M-S-t" . embark-act))
+  :after selectrum
   :config
-  (defun my/refresh-selectrum ()
-    (setq selectrum--previous-input-string nil))
-  (add-hook 'embark-pre-action-hook #'my/refresh-selectrum))
+  (add-hook 'embark-target-finders #'selectrum-get-current-candidate)
+  (add-hook 'embark-candidate-collectors #'seletrum-set-selected-candidate)
+
+  ;; no unnecessary computation delay after injection
+  (add-hook 'embark-setup-hook 'selectrum-set-selected-candidate)
+
+  (defun my/embark-selectrum-input-getter+ ()
+    (when selectrum-active-p
+      (let ((input (selectrum-get-current-input)))
+        (if minibuffer-completing-file-name
+            ;; only the input used for matching.
+            (file-name-nondirectory input)
+          input)))))
+
+(use-package marginalia
+  ;; tries to fetch the master when the branch is main
+  :straight (:type git :flavor melpa :host github :repo "minad/marginalia"
+                   :branch "main")
+  :after (selectrum)
+  :custom (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light))
+  :config
+  (marginalia-mode))
+
+(use-package consult
+  :bind (("C-c o" . consult-outline)
+         ("C-c b" . consult-buffer)
+         ("C-x 4 b" . consult-buffer-other-window)
+         ("C-x 5 b" . consult-buffer-other-frame)
+         ("M-g e" . consult-error)
+         ("M-g m" . consult-mark)
+         ("M-g l" . consult-line)
+         ("M-g i" . consult-imenu)
+         ("M-y" . consult-yank-pop)
+         :map isearch-mode-map
+         ("M-g" . consult-line-from-isearch)))
+
+(use-package consult-selectrum)
 
 (use-package hippie-exp
   :straight nil
@@ -1480,12 +1376,6 @@ Use as a value for `completion-in-region-function'."
 (use-package expand-region
   :bind (("C-=" . er/expand-region)))
 
-;; the concept is cool, but it doesn't play well with smartparens.
-;; C-w is bound to sp-kill-sexp, not whole-line-or-region-kill-region.
-(comment
- (use-package whole-line-or-region
-   :config (whole-line-or-region-global-mode +1)))
-
 (use-package isearch
   :straight nil
   :custom ((isearch-lazy-count t)
@@ -1493,16 +1383,16 @@ Use as a value for `completion-in-region-function'."
 
 (use-package etags
   :straight nil
-  ;; reload tags without asking
-  :custom ((tags-revert-without-query 1)))
+  :custom ((tags-revert-without-query 1 "reload tags without asking")))
 
 (use-package yasnippet
   :bind (:map yas-minor-mode-map
-         ("<tab>" . nil)
-         ("TAB" . nil))
+              ("<tab>" . nil)
+              ("TAB" . nil))
   :custom (yas-wrap-around-region t)
   :config
   (yas-global-mode +1)
+  ;; don't work in :bind
   (define-key yas-minor-mode-map (kbd "SPC") yas-maybe-expand)
 
   (defun my/inside-comment-or-string-p ()
@@ -1523,16 +1413,12 @@ Use as a value for `completion-in-region-function'."
           '(not (or (my/inside-comment-or-string-p)
                     (my/in-start-of-sexp-p)))))
 
-  (mapcar (lambda (mode-hook)
-            (add-hook mode-hook #'my/yas-fix-local-condition))
-          '(emacs-lisp-mode-hook
-            lisp-interaction-mode-hook
-            clojure-mode-hook
-            c-mode-hook)))
-
-(comment
- (use-package beacon
-   :config (beacon-mode 1)))
+  (mapc (lambda (mode-hook)
+          (add-hook mode-hook #'my/yas-fix-local-condition))
+        '(emacs-lisp-mode-hook
+          lisp-interaction-mode-hook
+          clojure-mode-hook
+          c-mode-hook)))
 
 (use-package pulse
   :straight nil
@@ -1571,7 +1457,7 @@ Use as a value for `completion-in-region-function'."
              avy-goto-line)
   :bind (:map isearch-mode-map
               ("C-'" . avy-isearch))
-  :config
+  :init
   (defhydra hydra-avy (global-map "M-g")
     "avy goto"
     ("c" avy-goto-char "char")
@@ -1616,6 +1502,7 @@ Use as a value for `completion-in-region-function'."
     (indent-for-tab-command))
 
   (let ((c-like '(c++mode
+                  cc-mode
                   c-mode
                   css-mode
                   go-mode
@@ -1695,6 +1582,10 @@ Use as a value for `completion-in-region-function'."
       (hydra-set-property 'hydra-sp :verbosity 0)
       (hydra-sp/body))))
 
+(use-package objed
+  :config
+  (objed-mode))
+
 (use-package web-mode
   :mode (("\\.erb\\'" . web-mode)
          ("\\.mustache\\'" . web-mode)
@@ -1726,11 +1617,13 @@ Use as a value for `completion-in-region-function'."
   :straight nil
   :hook ((sql-interactive-mode . toggle-truncate-lines)
          (sql-mode . my/sql-sane-electric-indent-mode))
+  :commands (psql)
   :config
+  (defalias 'psql #'sql-postgres)
   (defun my/sql-sane-electric-indent-mode ()
     "Fix `electric-indent-mode' behaviour locally."
     (interactive)
-    (setq electric-indent-inhibit nil)))
+    (setq-local electric-indent-inhibit nil)))
 
 (use-package sql-indent
   :hook ((sql-mode . sqlind-minor-mode)))
@@ -1755,7 +1648,8 @@ Use as a value for `completion-in-region-function'."
   :hook ((markdown-mode . auto-fill-mode)))
 
 (use-package yaml-mode
-  :mode "\\.yml\\'")
+  :mode "\\.yml\\'"
+  :hook ((yaml-mode . turn-off-flyspell)))
 
 (use-package toml-mode
   :mode "\\.toml\\'")
@@ -1796,7 +1690,20 @@ Use as a value for `completion-in-region-function'."
 (use-package elisp-mode
   :straight nil
   :bind (:map emacs-lisp-mode-map
-              ("C-c C-k" . eval-buffer)))
+              ("C-c C-k" . eval-buffer)
+              ("C-c k"   . my/ert-all)
+              ("C-c C-z" . my/ielm-repl))
+  :config
+  (defun my/ert-all ()
+    "Run all ert tests."
+    (interactive)
+    (ert t))
+
+  (defun my/ielm-repl ()
+    "Pop up a ielm buffer."
+    (interactive)
+    (pop-to-buffer (get-buffer-create "*ielm*"))
+    (ielm)))
 
 (comment
  (use-package slime
@@ -1879,10 +1786,6 @@ Use as a value for `completion-in-region-function'."
     (prettify-symbols-mode +1))
   (add-hook 'clojure-mode-hook 'my/clojure-mode-hook))
 
-(use-package geiser
-  :config
-  (setq geiser-guile-binary "guile3.0"))
-
 (use-package cider
   :custom (cider-repl-display-help-banner nil)
   :bind (:map cider-repl-mode-map
@@ -1926,6 +1829,10 @@ Anyway, set forcefully `eldoc-documentation-function' to
       (display-buffer-in-side-window
        buf (cddr (assoc "^\\*cider-repl" display-buffer-alist))))))
 
+(use-package geiser
+  :config
+  (setq geiser-guile-binary "guile3.0"))
+
 (use-package flymake
   :straight nil
   :hook (prog-mode . flymake-mode)
@@ -1945,64 +1852,93 @@ Anyway, set forcefully `eldoc-documentation-function' to
 
 (use-package eglot
   :commands (eglot)
-  :config (progn
-            (define-key eglot-mode-map (kbd "<f1>") 'eglot-code-actions)
-            (define-key eglot-mode-map (kbd "<f2>") 'eglot-format)
+  :hook (eglot-hook my/eglot-hook)
+  :config
+  (define-key eglot-mode-map (kbd "<f1>") 'eglot-code-actions)
+  (define-key eglot-mode-map (kbd "<f2>") 'eglot-format)
 
-            ;; get rid of the highlighting when I'm hovering a symbol
-            (add-to-list 'eglot-ignored-server-capabilites
-                         :documentHighlightProvider)
+  ;; get rid of the highlighting when I'm hovering a symbol
+  (add-to-list 'eglot-ignored-server-capabilites
+               :documentHighlightProvider)
 
-            ;; try to make sqls work
-            (add-to-list 'display-buffer-alist
-                         '("\\*sqls\\*"
-                           (display-buffer-reuse-window display-buffer-at-bottom)
-                           (reusable-frames . visible)
-                           (window-height . 0.3)))
+  ;; organize imports on demand
+  (defun my/eglot-organize-imports ()
+    "Try to execute code action `source.organizeImports'."
+    (interactive)
+    (unless (eglot--server-capable :codeActionProvider)
+      (eglot--error "Server can't execute code actions!"))
+    (let* ((server (eglot--current-server-or-lose))
+           (actions (jsonrpc-request server :textDocument/codeAction
+                                     (list :textDocument (eglot--TextDocumentIdentifier))))
+           (action (cl-find-if
+                    (jsonrpc-lambda (&key kind &allow-other-keys)
+                      (string-equal kind "source.organizeImports"))
+                    actions)))
+      (when action
+        (eglot--dcase action
+          (((Command) command arguments)
+           (eglot-execute-command server (intern command) arguments))
+          (((CodeAction) edit command)
+           (when edit
+             (eglot--apply-workspace-edit edit))
+           (when command
+             (eglot--dbind ((Command) command arguments) command
+               (eglot-execute-command server (intern command) arguments))))))))
 
-            (defclass eglot-sqls (eglot-lsp-server) ()
-              :documentation "SQL's Language Server")
-            (add-to-list 'eglot-server-programs '(sql-mode . (eglot-sqls "sqls")))
-            (cl-defmethod eglot-execute-command
-              ((server eglot-sqls) (command (eql executeQuery)) arguments)
-              "For executeQuery."
-              (let* ((beg (eglot--pos-to-lsp-position (if (use-region-p)
-                                                          (region-beginning)
-                                                        (point-min))))
-                     (end (eglot--pos-to-lsp-position (if (use-region-p)
-                                                          (region-end)
-                                                        (point-max))))
-                     (res (jsonrpc-request server :workspace/executeCommand
-                                           `(:command ,(format "%s" command)
-                                                      :arguments ,arguments
-                                                      :timeout 0.5
-                                                      :range (:start ,beg :end ,end))))
-                     (buffer (generate-new-buffer "*sqls*")))
-                (with-current-buffer buffer
-                  (eglot--apply-text-edits `[(:range
-                                              (:start (:line 0 :character 0)
-                                                      :end (:line 0 :character 0))
-                                              :newText ,res)])
-                  (org-mode))
-                (pop-to-buffer buffer)))
+  (defun my/eglot-hook ()
+    "Actions to do when eglot is started."
+    (add-hook 'before-save-hook #'my/eglot-organize-imports 30 t))
 
-            (cl-defmethod eglot-execute-command
-              ((server eglot-sqls) (_cmd (eql switchDatabases)) arguments)
-              "For switchDatabase."
-              (let* ((res (jsonrpc-request server :workspace/executeCommand
-                                           `(:command "showDatabases"
-                                                      :arguments ,arguments
-                                                      :timeout 0.5)))
-                     (menu-items (split-string res "\n"))
-                     (menu `("Eglot code actions:" ("dummy" ,@menu-items)))
-                     (db (if (listp last-nonmenu-event)
-                             (x-popup-menu last-nonmenu-event menu)
-                           (completing-read "[eglot] Pick a database: "
-                                            menu-items nil t
-                                            nil nil (car menu-items)))))
-                (jsonrpc-request server :workspace/executeCommand
-                                 `(:command "switchDatabase" :arguments [,db]
-                                            :timeout 0.5))))))
+  ;; try to make sqls work
+  (add-to-list 'display-buffer-alist
+               '("\\*sqls\\*"
+                 (display-buffer-reuse-window display-buffer-at-bottom)
+                 (reusable-frames . visible)
+                 (window-height . 0.3)))
+
+  (defclass eglot-sqls (eglot-lsp-server) ()
+    :documentation "SQL's Language Server")
+  (add-to-list 'eglot-server-programs '(sql-mode . (eglot-sqls "sqls")))
+  (cl-defmethod eglot-execute-command
+    ((server eglot-sqls) (command (eql executeQuery)) arguments)
+    "For executeQuery."
+    (let* ((beg (eglot--pos-to-lsp-position (if (use-region-p)
+                                                (region-beginning)
+                                              (point-min))))
+           (end (eglot--pos-to-lsp-position (if (use-region-p)
+                                                (region-end)
+                                              (point-max))))
+           (res (jsonrpc-request server :workspace/executeCommand
+                                 `(:command ,(format "%s" command)
+                                            :arguments ,arguments
+                                            :timeout 0.5
+                                            :range (:start ,beg :end ,end))))
+           (buffer (generate-new-buffer "*sqls*")))
+      (with-current-buffer buffer
+        (eglot--apply-text-edits `[(:range
+                                    (:start (:line 0 :character 0)
+                                            :end (:line 0 :character 0))
+                                    :newText ,res)])
+        (org-mode))
+      (pop-to-buffer buffer)))
+
+  (cl-defmethod eglot-execute-command
+    ((server eglot-sqls) (_cmd (eql switchDatabases)) arguments)
+    "For switchDatabase."
+    (let* ((res (jsonrpc-request server :workspace/executeCommand
+                                 `(:command "showDatabases"
+                                            :arguments ,arguments
+                                            :timeout 0.5)))
+           (menu-items (split-string res "\n"))
+           (menu `("Eglot code actions:" ("dummy" ,@menu-items)))
+           (db (if (listp last-nonmenu-event)
+                   (x-popup-menu last-nonmenu-event menu)
+                 (completing-read "[eglot] Pick a database: "
+                                  menu-items nil t
+                                  nil nil (car menu-items)))))
+      (jsonrpc-request server :workspace/executeCommand
+                       `(:command "switchDatabase" :arguments [,db]
+                                  :timeout 0.5)))))
 
 (use-package rainbow-mode
     :commands (rainbow-mode)
@@ -2016,10 +1952,11 @@ Anyway, set forcefully `eldoc-documentation-function' to
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(custom-safe-themes
-   '("88ca45ddc278fd5e14f1f5449b7a48098866fd21f6eb4f44f1e68765688f5aac" "7aba25b0e38b789e5357dc9b68206060293072fdc3526cb873ae23fea49b79cd" "36a7407dd4f45368abcf4619b25b3af1bc2fdd86b2d7433647d702011d90c5bc" "491b9ce0a6522f80b6a65aeaa19e59580307d2ee5ff7b435382a4caa65a5141d" "66a62497a8c8cffdc823d883b83679e231b95040b10a4b38bdd4f647867b196a" "dd260b6a42d434555c875acb5bab468e54a0cdc666350c8bfa0ed0c8ed487551" "43371217d8e10b4a20aba538c5bb743f10e4d69467b2186576ff47e7fa045ad3" "57e9df4318e6465bd881861a681726501e593da567a16ede7fe63dadb7cb648f" "913516312ab3235a580b403283d5a8835dc601eb0239b224c6c27d35dc6b4f38" "5c0148e41b983f85ab41852d4ce227b957bb7a76bfe51d55184a42e5a8ba1a48" "1f143078ac1fa82ed6808cb8a83665405fefe4e0bfba3059f61d056961bc545a" "87bfa6720edbaf5e9a4483e6c730928e1e177888bbd8ec82059ad6c4f5846383" "57a365527f69e8c5dee8493f188bb6b9796b9f1abdd969dccc4ea8f4bad231e8" "ed7e3976ccb8646522faaa940ccaa2b02d85db1b794cbcd2076fb4590d39ebff" "ea48768f2373a093db258467b7303606b80ce693354eccc87c01374ce45dba48" "09c905d801be38dcd00e69f10751c884358e1c94a5b719ebe18770c6d751ef83" "35f8dfc576d5bf1e7016a20d9ceaa31907e632984705769479bb2592d2e2cf72" "ab4bfc1cdcd6deb99ddc2be8fc0fde03047ab9a8773dded828cdb65f1187372d" "f5a7b992f55e385f30ee40998f74b598849afbbf683eb1cd8b4e6418d637e228" "2a5da04924bdd20aefd78d5093afc07d76520f87f3317c4938bb8ce8e5fcf16f" "5c327f1e2ad451afb2cc1a9d6e33ba548c23be63f9142782880c7e3c7b4a0b44" "e0ca2751f3b849d4d54056312274d5f1aa39e56d2844a1d5797743feea98faa6" "b96f9d3af74bd6b758134c0f587e1e6b39cad97f9d709d033110795cb8da0b57" "c9b17602ab7063bbbcf99f3f74800eaa6e26beaa131a374937e28d381ca259c4" "12fc489c67eb874fead9221152564fd40b1ace698d861a13bfe0683afbdb66dc" "32a3e22993c122ffc0eb716d3013b94bb86044b2536d1b63780e13283f578e11" "33724fc2ebc6972567169cbfc54139ba5f334855d7e74fd0328312ed4f97fb2f" "7bdda6056822c9a8e6d1c72ffc340568f38c54ce1813f75ef01bb69e2f80f774" "8ceaf37709be42c21b3e74597c16ad2a1866a324710b74e3f7388ce8c050d2fa" "d20f39b2c961611e9d135d8e0e92b2444141253f59520063d1119746e202f192" "0e160aa1a035935ea1d70ae8d15e22eb01d9010aa2bec13e1cff50bdc5c04332" "51a10d605e1bc9f3a7912a547d2672d5ab6457e62a00a5e3f4873e6eeee1ffac" "576817b56acd8a77a3957312a14f90b1dad6c9d5e08c0f38b37f301dd8d302c2" "442d9c6c7ab6594bd5970b2d0ab4dd8185fb9602480b309d7326f536ff145e6d" "cc8f864bf528840e09a7e10642bb738dd6edf9ca747745c4a6c1840cd79e1298" "bfae9e706314f5b9da125bf62ba68016318c1d325fd73d05e4a92c664d2da43f" "140c6b56b2ba1fb48169434a1fd8a653922be7e2957da1ffed8cfc19fb90fc43" "0862fe9bb25b1cd6e59509d3ef1c492a1bf55aca50905b9d2109036e52044140" "1617cc7ae9d6e797ef064663e71ccd8af1c7d5a67604bcc33834f25d3be5da50" "ba31dc1c26401c5d5b35de655ea9d7aee9f21527328b54b4da6280c2460f4825" "3aeea09b1181f2a5f924e68a7933920cba06adf165e775883a98749ff57bb10a" "a6b553143cd8a024a045ceeca2c533941d877c8cc16f87ed5d1acdf0c5044bac" "b2f05f6e0fa42e08069f4737e0f7dd0d663c6e3934ba7a42673d1714f7d80400" "9bfd8e0624b0e8e0ba4203901bb58c41b927f8b251272acdcf517d707b5bbc2c" "e5f768c8bf5a5dd28a8b84655b3b5e872e120a75376c669c51805b22910084ca" "5cf82b1be04e91e7024e1934a7a909c124e8e6f2f85fddfacc9724d4ad2ec9b9" "878ddd87e7ecd070bd767237178f1061b01a1eb49afe23c4358499360888339b" "92181d614e1270ac76da6439cf6a14defc9dd16454e0130c8432896632e4c91c" "e240f6d5a8ccd4b2a09518f04ca97cf195f8f337463d62e7c8baa0d5ad40d22c" "5b794603fb798c6f1d57a9c3d5991ed8dd5d0071d1a97f106be4ca772c1d61e8" "5ed24c6f7d30af9c94dfc38fc0fce8ece61e250d5ae1f666d00ef1649dc703d3" "6543614e44b95523f05a0be1e96d78468751f173625b4732d7e99cbce959e312" "0258e7050ef41bbee17959af0cfe6b4e5d2c2e49439a08770ce8f88b202487e9" "c3d13cbba1d87983ef930cda55f08f99f0abb3a4c169446f11141ed19b4af1e6" "b4de17f7a20bd9966e7752a75129df10f33b9a53319de3f1fd48c9fec9806207" "e0b2ad54031a49dd054da83287273f03536c160a2dde832f442e639122add22d" "f6686e892fc9ae1e2c6c447a7bbc4f431e9b28420689eaf01b6fba756ea5f475" "5ded9878f4a765e741f400c081ab4d8c88c78e2c0f44db5c28d4c22fb41526a6" "006a5cbca622bfa20c238c6e7f6856f052cb612381d45c0061c67d1b08b89d2d" "19fb1be04e066c498d6c674b4e61fc922c6467017ec130b5fe2f2e1646c472e9" "b611d0a5e5c71d6ce316588651f0b49c52702e98cfa95795c103fcea60a520e1" "af08c8e7732e89201fd463b3a04d1d57fecb549bf1a191195911dbe58548fb8d" "f4560d1069f889dfef0a7a2b34d6360ad1a0dd1ec80993eb56805cd06121eff5" "410201c91ed9820590f435cca51305cc83c0c900f2ff63ccd08c526e5b453d8c" "9b2818eb1152a37d9d839371473a7446b441e4360ecdd9a9a1fba72dec24c354" "1fafb9b13aadb96480014b871909a26d46c4ee9c3a57b4efea1e6a688e085451" "2b3d504022714945368ef382df8fe9c1929268f9ad49d889e30c8d5244ec8c9e" "fdfaae66c6bc93872c3e4abeb9488a926bf2fba148889a388a75d5fe81fbf44b" "d6d7f76ed646e3b4c8d11dcf004d628cee7b2900aea3c2a63474a0deaa567dd3" "564abaa9051df8d499ab08efb6830a0da279521f1bae39b4d5c99326179e651c" "2386aa5a90d6d6ae25f8c9bb3081c99bebe10622e470408e57d59e95f2902e68" "7168cb6c66db59aefaf58358d192ab8a8f60a6e50b6c2eedb239ff751cc0ed7f" default))
+   '("c3a4d67bcbf50a50d3dfc9c0c9b57b2ee50cfe0abcd79419e99453ca743a56a8" "dee0ab432972a6744735e1d1770093828ad3eadef4b5e4048405b70d6c6ef69c" "88ca45ddc278fd5e14f1f5449b7a48098866fd21f6eb4f44f1e68765688f5aac" "7aba25b0e38b789e5357dc9b68206060293072fdc3526cb873ae23fea49b79cd" "36a7407dd4f45368abcf4619b25b3af1bc2fdd86b2d7433647d702011d90c5bc" "491b9ce0a6522f80b6a65aeaa19e59580307d2ee5ff7b435382a4caa65a5141d" "66a62497a8c8cffdc823d883b83679e231b95040b10a4b38bdd4f647867b196a" "dd260b6a42d434555c875acb5bab468e54a0cdc666350c8bfa0ed0c8ed487551" "43371217d8e10b4a20aba538c5bb743f10e4d69467b2186576ff47e7fa045ad3" "57e9df4318e6465bd881861a681726501e593da567a16ede7fe63dadb7cb648f" "913516312ab3235a580b403283d5a8835dc601eb0239b224c6c27d35dc6b4f38" "5c0148e41b983f85ab41852d4ce227b957bb7a76bfe51d55184a42e5a8ba1a48" "1f143078ac1fa82ed6808cb8a83665405fefe4e0bfba3059f61d056961bc545a" "87bfa6720edbaf5e9a4483e6c730928e1e177888bbd8ec82059ad6c4f5846383" "57a365527f69e8c5dee8493f188bb6b9796b9f1abdd969dccc4ea8f4bad231e8" "ed7e3976ccb8646522faaa940ccaa2b02d85db1b794cbcd2076fb4590d39ebff" "ea48768f2373a093db258467b7303606b80ce693354eccc87c01374ce45dba48" "09c905d801be38dcd00e69f10751c884358e1c94a5b719ebe18770c6d751ef83" "35f8dfc576d5bf1e7016a20d9ceaa31907e632984705769479bb2592d2e2cf72" "ab4bfc1cdcd6deb99ddc2be8fc0fde03047ab9a8773dded828cdb65f1187372d" "f5a7b992f55e385f30ee40998f74b598849afbbf683eb1cd8b4e6418d637e228" "2a5da04924bdd20aefd78d5093afc07d76520f87f3317c4938bb8ce8e5fcf16f" "5c327f1e2ad451afb2cc1a9d6e33ba548c23be63f9142782880c7e3c7b4a0b44" "e0ca2751f3b849d4d54056312274d5f1aa39e56d2844a1d5797743feea98faa6" "b96f9d3af74bd6b758134c0f587e1e6b39cad97f9d709d033110795cb8da0b57" "c9b17602ab7063bbbcf99f3f74800eaa6e26beaa131a374937e28d381ca259c4" "12fc489c67eb874fead9221152564fd40b1ace698d861a13bfe0683afbdb66dc" "32a3e22993c122ffc0eb716d3013b94bb86044b2536d1b63780e13283f578e11" "33724fc2ebc6972567169cbfc54139ba5f334855d7e74fd0328312ed4f97fb2f" "7bdda6056822c9a8e6d1c72ffc340568f38c54ce1813f75ef01bb69e2f80f774" "8ceaf37709be42c21b3e74597c16ad2a1866a324710b74e3f7388ce8c050d2fa" "d20f39b2c961611e9d135d8e0e92b2444141253f59520063d1119746e202f192" "0e160aa1a035935ea1d70ae8d15e22eb01d9010aa2bec13e1cff50bdc5c04332" "51a10d605e1bc9f3a7912a547d2672d5ab6457e62a00a5e3f4873e6eeee1ffac" "576817b56acd8a77a3957312a14f90b1dad6c9d5e08c0f38b37f301dd8d302c2" "442d9c6c7ab6594bd5970b2d0ab4dd8185fb9602480b309d7326f536ff145e6d" "cc8f864bf528840e09a7e10642bb738dd6edf9ca747745c4a6c1840cd79e1298" "bfae9e706314f5b9da125bf62ba68016318c1d325fd73d05e4a92c664d2da43f" "140c6b56b2ba1fb48169434a1fd8a653922be7e2957da1ffed8cfc19fb90fc43" "0862fe9bb25b1cd6e59509d3ef1c492a1bf55aca50905b9d2109036e52044140" "1617cc7ae9d6e797ef064663e71ccd8af1c7d5a67604bcc33834f25d3be5da50" "ba31dc1c26401c5d5b35de655ea9d7aee9f21527328b54b4da6280c2460f4825" "3aeea09b1181f2a5f924e68a7933920cba06adf165e775883a98749ff57bb10a" "a6b553143cd8a024a045ceeca2c533941d877c8cc16f87ed5d1acdf0c5044bac" "b2f05f6e0fa42e08069f4737e0f7dd0d663c6e3934ba7a42673d1714f7d80400" "9bfd8e0624b0e8e0ba4203901bb58c41b927f8b251272acdcf517d707b5bbc2c" "e5f768c8bf5a5dd28a8b84655b3b5e872e120a75376c669c51805b22910084ca" "5cf82b1be04e91e7024e1934a7a909c124e8e6f2f85fddfacc9724d4ad2ec9b9" "878ddd87e7ecd070bd767237178f1061b01a1eb49afe23c4358499360888339b" "92181d614e1270ac76da6439cf6a14defc9dd16454e0130c8432896632e4c91c" "e240f6d5a8ccd4b2a09518f04ca97cf195f8f337463d62e7c8baa0d5ad40d22c" "5b794603fb798c6f1d57a9c3d5991ed8dd5d0071d1a97f106be4ca772c1d61e8" "5ed24c6f7d30af9c94dfc38fc0fce8ece61e250d5ae1f666d00ef1649dc703d3" "6543614e44b95523f05a0be1e96d78468751f173625b4732d7e99cbce959e312" "0258e7050ef41bbee17959af0cfe6b4e5d2c2e49439a08770ce8f88b202487e9" "c3d13cbba1d87983ef930cda55f08f99f0abb3a4c169446f11141ed19b4af1e6" "b4de17f7a20bd9966e7752a75129df10f33b9a53319de3f1fd48c9fec9806207" "e0b2ad54031a49dd054da83287273f03536c160a2dde832f442e639122add22d" "f6686e892fc9ae1e2c6c447a7bbc4f431e9b28420689eaf01b6fba756ea5f475" "5ded9878f4a765e741f400c081ab4d8c88c78e2c0f44db5c28d4c22fb41526a6" "006a5cbca622bfa20c238c6e7f6856f052cb612381d45c0061c67d1b08b89d2d" "19fb1be04e066c498d6c674b4e61fc922c6467017ec130b5fe2f2e1646c472e9" "b611d0a5e5c71d6ce316588651f0b49c52702e98cfa95795c103fcea60a520e1" "af08c8e7732e89201fd463b3a04d1d57fecb549bf1a191195911dbe58548fb8d" "f4560d1069f889dfef0a7a2b34d6360ad1a0dd1ec80993eb56805cd06121eff5" "410201c91ed9820590f435cca51305cc83c0c900f2ff63ccd08c526e5b453d8c" "9b2818eb1152a37d9d839371473a7446b441e4360ecdd9a9a1fba72dec24c354" "1fafb9b13aadb96480014b871909a26d46c4ee9c3a57b4efea1e6a688e085451" "2b3d504022714945368ef382df8fe9c1929268f9ad49d889e30c8d5244ec8c9e" "fdfaae66c6bc93872c3e4abeb9488a926bf2fba148889a388a75d5fe81fbf44b" "d6d7f76ed646e3b4c8d11dcf004d628cee7b2900aea3c2a63474a0deaa567dd3" "564abaa9051df8d499ab08efb6830a0da279521f1bae39b4d5c99326179e651c" "2386aa5a90d6d6ae25f8c9bb3081c99bebe10622e470408e57d59e95f2902e68" "7168cb6c66db59aefaf58358d192ab8a8f60a6e50b6c2eedb239ff751cc0ed7f" default))
  '(debug-on-error nil)
  '(safe-local-variable-values
-   '((sly-port . 4004)
+   '((c-default-style . "K&R")
+     (sly-port . 4004)
      (eval let
            ((args
              '("/usr/include" "/usr/local/include" "vendor/json/include")))
