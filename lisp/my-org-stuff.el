@@ -23,6 +23,9 @@
          ("C-x w" . org-edit-src-exit)
          ("C-x C-s" . org-edit-src-exit))
   :config
+  (require 'ox-latex)
+  (setq org-latex-inputenc-alist '(("utf8" . "utf8x")))
+
   (setq
 
    org-startup-folded t
