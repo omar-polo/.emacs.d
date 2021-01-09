@@ -9,7 +9,9 @@
 
 (define-key global-map (kbd "<f12>") 'mu4e)
 
-(setq mu4e-maildir (expand-file-name "~/Maildir")
+(setq user-mail-address "op@omarpolo.com"
+
+      mu4e-maildir (expand-file-name "~/Maildir")
       mu4e-get-mail-command "mbsync -a"
       mu4e-update-interval 180
       mu4e-headers-auto-update t

@@ -14,7 +14,7 @@
 (use-package org
   :hook ((org-mode . variable-pitch-mode)
          (org-mode . visual-line-mode)
-         (org-mode . olivetti-mode)
+         ;; (org-mode . olivetti-mode)
          ;; (org-mode . org-num-mode)
          )
   :bind (("C-c c" . org-capture)
@@ -58,7 +58,9 @@
      ("n" "note" entry (file "~/org/refile.org")
       "* %? :NOTE:\n %U\n %a\n" :clock-in t :clock-resume t)
      ("j" "Journal" entry (file+datetree "~/org/diary.org")
-      "* %?" :clock-in t :clock-resume t))
+      "* %?" :clock-in t :clock-resume t)
+     ("L" "TIL" entry (file "~/org/til.org")
+      "* %?\n" :clock-in t :clock-resume t))
 
    org-todo-keywords '((sequence "TODO(t)" "NEXT(n)" "|" "DONE(d)")
                        (sequence "WAITING(w@/!)" "HOLD(h@/!)" "|" "CANCELLED(c@/!)" "INACTIVE(i@/!)"))

@@ -31,15 +31,23 @@
    ;; buffer name
    " %b "
 
+   ;; major mode
+   ;; " %m "
+
+   ;; recursion level
+   (:eval
+    (let ((l (recursion-depth)))
+      (when (> l 1)
+        (list (format "level:%s" (recursion-depth))
+              " "))))
+
    ;; misc info
-   (:eval (when (not (my/alt-mode-p))
+   (:eval (unless (my/alt-mode-p)
             `(,mode-line-remote ,mode-line-client ,mode-line-modified)))
 
    ;; vc can be useful
    (:eval (when-let (vc vc-mode)
-            `(" "
-              ,(substring vc 5)
-              " ")))
+            `(" " ,vc " ")))
 
    ;; percentage, line number and narrow
    (:eval (if (my/alt-mode-p)
