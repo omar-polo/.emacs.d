@@ -38,13 +38,17 @@
 (add-to-list 'load-path "/usr/local/share/emacs/site-lisp/mu4e")
 
 ;; (load-theme 'op t)
-(load-theme 'minimal-light t)
+
+(if (= 28 emacs-major-version)
+    (load-theme 'modus-operandi t)
+  (load-theme 'minimal-light t))
+
 (require 'my-modeline)
 
-(defvar my/font "Iosevka Term Curly 10")
+(defvar my/font "Go mono 9")
 (defvar my/variable-font "Input Serif Narrow 12")
 
-;; (setq my/font "Iosevka Term Curly 10")
+;; (setq my/font "Go mono 9")
 ;; (set-frame-font my/font)
 ;; (add-to-list 'default-frame-alist `(font . ,my/font))
 

@@ -740,6 +740,10 @@ With prefix argument ARG switches (or create) the nth side-term."
     ("l" winner-redo "redo")
     ("q" nil :exit nil)))
 
+(use-package autoinsert
+  :straight nil
+  :config (auto-insert-mode +1))
+
 (use-package ace-window
   :straight (:type git :host github :repo "notmgsk/ace-window" :branch "feature/posframe")
   :bind (("M-o" . ace-window))
@@ -758,15 +762,22 @@ With prefix argument ARG switches (or create) the nth side-term."
 	                          (?v aw-split-window-vert "Split Vert Window")
 	                          (?b aw-split-window-horz "Split Horz Window")
 	                          (?O delete-other-windows "Delete Other Windows")
-	                          (?? aw-show-dispatch-help))))
+	                          (?? aw-show-dispatch-help)))
+           (display-buffer-base-action '((display-buffer-reuse-window my/ace-display-buffer))))
   :config
+
+  (defun my/ace-display-buffer (buf alist)
+    "Like `ace-display-buffer' but makes me always choose the window."
+    (let ((aw-dispatch-when-more-than 1))
+      (ace-display-buffer buf alist)))
+
   ;; the fork requires posframe
   (use-package posframe)
 
-  (ace-window-posframe-mode))
+  (ace-window-posframe-mode +1))
 
 (use-package transpose-frame
-  :bind ("M-#" . my/hydra-window/body)
+  :bind ("C-#" . my/hydra-window/body)
   :commands (transpose-frame flip-frame flop-frame
                              rotate-frame rotate-frame-clockwise
                              rotate-frame-anti-anticlockwise)
@@ -847,6 +858,16 @@ _?_ toggle help    ^ ^                _-_   split vert.
         guess-language-languages '(en it)
         guess-language-min-paragraph-length 45))
 
+(use-package poporg
+  :bind (("C-c \"" . poporg-dwim)
+         :map poporg-mode-map
+         ("C-c C-k" . kill-buffer)
+         ("C-x C-s" . poporg-update-and-save)
+         ("C-c C-s" . poporg-edit-exit)))
+
+(use-package typo
+  :hook ((gemini-mode . typo-mode)))
+
 (use-package olivetti
   :hook ((gemini-mode . olivetti-mode)
          (markdown-mode . olivetti-mode)
@@ -873,6 +894,14 @@ _?_ toggle help    ^ ^                _-_   split vert.
 (use-package keycast
   :commands (keycast-mode)
   :custom (keycast-insert-after 'mode-line-misc-info))
+
+(use-package my-gif
+  :straight nil
+  :bind (("C-<f9>" . my/gif-screencast)))
+
+(use-package sndio
+  :straight nil
+  :load-path "~/.emacs.d/lisp/sndio.el/")
 
 (use-package emms
   :commands (emms)
@@ -1098,7 +1127,7 @@ _-_: dec     _p_: prev        _R_: repeat all [% s(my/tick-symbol emms-repeat-pl
                    :branch "master"
                    :host github
                    :repo "zevlg/telega.el")
-  :custom ((telega-chat-use-markdown-version 1)
+  :custom ((telega-chat-input-markups '("markdown1" nil "markdown2"))
            (telega-use-images t)
            (telega-emoji-font-family "Noto Color Emoji"))
   :hook ((telega-root-mode . telega-notifications-mode)
@@ -1293,33 +1322,58 @@ Use as a value for `completion-in-region-function'."
            (delete-region start end)
            (insert completion)
            t)))))
+ )
 
- (use-package orderless
-   :custom ((orderless-matching-styles '(orderless-literal))
-            (completion-styles '(orderless partial-completion)))))
+(use-package orderless
+  :custom ((orderless-matching-styles '(orderless-literal orderless-regexp))
+           (completion-styles '(orderless partial-completion))
+           (orderless-component-separator #'orderless-escapable-split-on-space)
+           (orderless-pattern-compiler #'orderless-default-pattern-compiler)))
 
 (use-package selectrum
-  :custom (enable-recursive-minibuffers t)
-  :config
-  (selectrum-mode +1))
+  :custom ((enable-recursive-minibuffers t)
+           (selectrum-refine-candidates-function #'orderless-filter)
+           (selectrum-highlight-candidates-function #'orderless-highlight-matches))
+  :config (selectrum-mode +1))
 
-(use-package selectrum-prescient
-  :config
-  (selectrum-prescient-mode +1)
-  (prescient-persist-mode +1))
+(use-package which-key
+  ;; used only in embark until I'll learn those keys
+  :config (which-key-mode -1))
 
 (use-package embark
   :straight (:type git :host github :repo "oantolin/embark")
   :bind (:map minibuffer-local-completion-map
               ("M-t" . embark-act-noexit)
-              ("M-S-t" . embark-act)
+              ("C-M-t" . embark-act)
+              ("M-h" . embark-become)
               :map minibuffer-local-map
               ("M-t" . embark-act-noexit)
-              ("M-S-t" . embark-act))
+              ("C-M-t" . embark-act)
+              ("M-h" . embark-become))
   :after selectrum
+  ;; temp: use which key until these go in the muscle memory.
+  :custom ((embark-action-indicator
+            (lambda (map)
+              (which-key--show-keymap "Embark" map nil nil 'no-paging)
+              #'which-key--hide-popup-ignore-command))
+           (embark-become-indicator embark-action-indicator))
   :config
-  (add-hook 'embark-target-finders #'selectrum-get-current-candidate)
-  (add-hook 'embark-candidate-collectors #'seletrum-set-selected-candidate)
+  ;; (add-hook 'embark-target-finders #'selectrum-get-current-candidate)
+  ;; (add-hook 'embark-candidate-collectors #'seletrum-set-selected-candidate)
+
+  (add-hook 'embark-target-finders
+	    (defun my/current-candidate+category ()
+              (when selectrum-active-p
+	        (cons (selectrum--get-meta 'category)
+		      (selectrum-get-current-candidate)))))
+
+  (add-hook 'embark-candidate-collectors
+            (defun my/current-candidates+category ()
+              (when selectrum-active-p
+	        (cons (selectrum--get-meta 'category)
+		      (selectrum-get-current-candidates
+		       ;; Pass relative file names for dired.
+		       minibuffer-completing-file-name)))))
 
   ;; no unnecessary computation delay after injection
   (add-hook 'embark-setup-hook 'selectrum-set-selected-candidate)
@@ -1342,8 +1396,9 @@ Use as a value for `completion-in-region-function'."
   (marginalia-mode))
 
 (use-package consult
-  :bind (("C-c o" . consult-outline)
-         ("C-c b" . consult-buffer)
+  ;; :straight nil
+  ;; :load-path "~/w/consult/"
+  :bind (("C-x b" . consult-buffer)
          ("C-x 4 b" . consult-buffer-other-window)
          ("C-x 5 b" . consult-buffer-other-frame)
          ("M-g e" . consult-error)
@@ -1352,9 +1407,22 @@ Use as a value for `completion-in-region-function'."
          ("M-g i" . consult-imenu)
          ("M-y" . consult-yank-pop)
          :map isearch-mode-map
-         ("M-g" . consult-line-from-isearch)))
+         ("M-g" . my/consult-line-from-isearch))
+  :custom ((consult-grep-command '("grep" "--null" "--line-buffered" "-E" "-n" "-I" "-R" "." "-e"))
+           (consult-find-command '("find" "." "-not" "(" "-path" "*/.*" "-prune" ")" "-iname"))
+           (consult-project-root-function #'my/consult-project-function))
+  :config
+  (defun my/consult-project-function ()
+    (project-root (project-current)))
 
-(use-package consult-selectrum)
+  (defun my/consult-line-from-isearch ()
+    "Search by lines from isearch string."
+    (interactive)
+    (consult-line (if isearch-regexp
+                      isearch-string
+                    (regexp-quote isearch-string))))
+
+  (use-package consult-selectrum))
 
 (use-package hippie-exp
   :straight nil
@@ -1420,23 +1488,32 @@ Use as a value for `completion-in-region-function'."
           clojure-mode-hook
           c-mode-hook)))
 
-(use-package pulse
-  :straight nil
-  :config
-  (defun my/pulse-line (&rest _)
-    "Pulse the current line"
-    (pulse-momentary-highlight-one-line (point)))
-  (dolist (command '(scroll-up-command scroll-down-command
-                                       recenter-top-bottom other-window
-                                       reposition-window))
-    (advice-add command :after #'my/pulse-line))
+(comment
+ (use-package pulse
+   :straight nil
+   :config
+   (defun my/pulse-line (&rest _)
+     "Pulse the current line"
+     (pulse-momentary-highlight-one-line (point)))
+   (dolist (command '(scroll-up-command scroll-down-command
+                                        recenter-top-bottom other-window
+                                        reposition-window))
+     (advice-add command :after #'my/pulse-line))
 
-  (defun my/pulse-kill-ring-save (fn beg end &optional region)
-    "Pulse the region being saved to the kill ring."
-    (pulse-momentary-highlight-region beg end)
-    (apply fn beg end))
-  (advice-add 'kill-ring-save :around #'my/pulse-kill-ring-save)
-  (advice-remove 'kill-ring-save #'my/pulse-kill-ring-save))
+   (defun my/pulse-kill-ring-save (fn beg end &optional region)
+     "Pulse the region being saved to the kill ring."
+     (pulse-momentary-highlight-region beg end)
+     (apply fn beg end))
+   (advice-add 'kill-ring-save :around #'my/pulse-kill-ring-save)
+   (advice-remove 'kill-ring-save #'my/pulse-kill-ring-save)))
+
+(use-package face-remap
+  :straight nil
+  :hook ((variable-pitch-mode . my/variable-pitch-bar-point))
+  :config
+  (defun my/variable-pitch-bar-point ()
+    "Change cursor to a bar."
+    (setq cursor-type 'bar)))
 
 (use-package simple
   :straight nil
@@ -1501,7 +1578,8 @@ Use as a value for `completion-in-region-function'."
     (split-line)
     (indent-for-tab-command))
 
-  (let ((c-like '(c++mode
+  (let ((c-like '(awk-mode
+                  c++mode
                   cc-mode
                   c-mode
                   css-mode
@@ -1521,6 +1599,35 @@ Use as a value for `completion-in-region-function'."
   ;; it does not work.
   (sp-local-pair 'gerbil-mode "'" nil :actions :rem)
   (sp-local-pair 'gerbil-mode "`" nil :actions :rem)
+
+  (defun my/current-line-str ()
+    "Return the current line as string."
+    (buffer-substring-no-properties (line-beginning-position)
+                                    (line-end-position)))
+
+  (defun my/maybe-add-semicolon-paren (_id action _ctx)
+    "Insert semicolon after parens when appropriat.
+Mainly useful in C and derived, and only when ACTION is insert."
+    (when (eq action 'insert)
+      (save-excursion
+        ;; caret is between parens (|)
+        (forward-char)
+        (let ((line (my/current-line-str)))
+          (when (and (looking-at "\\s-*$")
+                     (not (string-match-p
+                           (regexp-opt '("if" "else" "switch" "for" "while"
+                                         "do" "define")
+                                       'words)
+                           line))
+                     (string-match-p "[\t ]" line)
+                     (not (my/inside-comment-or-string-p)))
+            (insert ";"))))))
+
+  (let ((c-like-modes-list '(c-mode c++-mode java-mode)))
+    (sp-local-pair c-like-modes-list "(" nil
+                   :post-handlers
+                   '(:add my/maybe-add-semicolon-paren)))
+
 
   (defhydra hydra-sp (:hint nil)
     "
@@ -1582,9 +1689,18 @@ Use as a value for `completion-in-region-function'."
       (hydra-set-property 'hydra-sp :verbosity 0)
       (hydra-sp/body))))
 
-(use-package objed
-  :config
-  (objed-mode))
+(comment
+ (use-package objed
+   :hook ((doc-view--mode . my/toggle-off-objed)
+          (image-mode . my/toggle-off-objed))
+
+   :config
+   (objed-mode)
+
+   (defun my/toggle-off-objed ()
+     "Disable objed"
+     (interactive)
+     (objed-local-mode -1))))
 
 (use-package web-mode
   :mode (("\\.erb\\'" . web-mode)
@@ -1600,7 +1716,7 @@ Use as a value for `completion-in-region-function'."
   :bind (:map c-mode-map
               ("C-M-a" . sp-beginning-of-sexp)
               ("C-M-e" . sp-end-of-sexp)
-              ("C-c c" . compile))
+              ("C-c M-c" . recompile))
   :custom ((c-basic-offset 8)
            (c-default-style "K&R"))
   :hook ((c-mode . my/c-indent)
@@ -1615,15 +1731,32 @@ Use as a value for `completion-in-region-function'."
 
 (use-package sql
   :straight nil
+  :bind (("C-z a s" . psql)
+         ("C-z a S" . my/psql-params))
   :hook ((sql-interactive-mode . toggle-truncate-lines)
          (sql-mode . my/sql-sane-electric-indent-mode))
-  :commands (psql)
+  :commands (psql my/visit-new-migration-file)
   :config
   (defalias 'psql #'sql-postgres)
   (defun my/sql-sane-electric-indent-mode ()
     "Fix `electric-indent-mode' behaviour locally."
     (interactive)
-    (setq-local electric-indent-inhibit nil)))
+    (setq-local electric-indent-inhibit nil))
+
+  (defun my/visit-new-migration-file (name)
+    "Visit a new SQL migration file named after NAME."
+    (interactive "Mname: ")
+    (let* ((name (replace-regexp-in-string " " "-" (string-trim name)))
+           (f (format "%s-%s.sql"
+                      (format-time-string "%Y%m%d%H%M")
+                      name)))
+      (find-file f)))
+
+  (defun my/psql-params (port)
+    "Easily connect to a psql on a non-standard port"
+    (interactive "nPort: ")
+    (let ((sql-port port))
+      (psql))))
 
 (use-package sql-indent
   :hook ((sql-mode . sqlind-minor-mode)))
@@ -1789,27 +1922,30 @@ Use as a value for `completion-in-region-function'."
 (use-package cider
   :custom (cider-repl-display-help-banner nil)
   :bind (:map cider-repl-mode-map
-              ("C-c C-l" . cider-repl-clear-buffer)
+              ;; more like comint
+              ("C-c M-o" . cider-repl-clear-buffer)
+              ("C-c C-l" . cider-repl-switch-to-other)
               :map cider-mode-map
               ("C-c C-z" . my/cider-repl))
   :config
-  (setq cider-enhanced-cljs-completion-p nil)
-  (defun my/cider-find-var (fn &optional arg var line)
-    "(Meant to be adviced around `cider-find-var') invert the
+  (comment
+   (setq cider-enhanced-cljs-completion-p nil)
+   (defun my/cider-find-var (fn &optional arg var line)
+     "(Meant to be adviced around `cider-find-var') invert the
 meaning of the prefix argument if it's not `-': if arg is present
 remove it, otherwise add it.  `cider-find-var' without the prefix
 argument will ask for a symbol (default thing at point), while I
 think its more useful to jump to the symbol at point, and ask for
 a symbol if an argument is given, like `xref-find-definitions'
 does."
-    (cond
-     ((eql '- arg) (funcall fn '-  var line))
-     ((null arg)   (funcall fn '(4)   var line))
-     (t            (funcall fn nil var line))))
-  (advice-add 'cider-find-var :around #'my/cider-find-var)
+     (cond
+      ((eql '- arg) (funcall fn '-  var line))
+      ((null arg)   (funcall fn '(4)   var line))
+      (t            (funcall fn nil var line))))
+   (advice-add 'cider-find-var :around #'my/cider-find-var)
 
-  (defun my/fix-cider-eldoc ()
-    "Cider eldoc support for some reason doesn't work anymore fix it.
+   (defun my/fix-cider-eldoc ()
+     "Cider eldoc support for some reason doesn't work anymore fix it.
 
 I suspect it's due to some package or dunno what that defines
 `eldoc-documentation-functions', while emacs 27 use
@@ -1819,19 +1955,29 @@ cause.
 
 Anyway, set forcefully `eldoc-documentation-function' to
 `cider-eldoc' fixes the situation."
-    (setq eldoc-documentation-function #'cider-eldoc))
-  (add-hook 'cider-mode-hook #'my/fix-cider-eldoc)
+     (setq eldoc-documentation-function #'cider-eldoc))
+   (add-hook 'cider-mode-hook #'my/fix-cider-eldoc))
 
-  (defun my/cider-repl ()
-    "Switch to repl buffer in side window."
-    (interactive)
+  (defun my/cider-repl (arg)
+    "Switch to repl buffer in side window.
+With non-nil ARG use `display-buffer' ignoring the rules in
+`display-buffer-alist'."
+    (interactive "P")
     (when-let (buf (cider-current-repl))
-      (display-buffer-in-side-window
-       buf (cddr (assoc "^\\*cider-repl" display-buffer-alist))))))
+      (call-interactively #'cider-repl-set-ns)
+      (if arg
+          (let (display-buffer-alist)   ; temp disable the rules
+            (display-buffer buf))
+        (display-buffer buf))
+      (let (display-buffer-alist)       ; disable them again
+        (pop-to-buffer buf '(display-buffer-reuse-window))))))
 
 (use-package geiser
   :config
   (setq geiser-guile-binary "guile3.0"))
+
+(use-package es-mode
+  :mode "\\.es\\'")
 
 (use-package flymake
   :straight nil
@@ -1952,10 +2098,11 @@ Anyway, set forcefully `eldoc-documentation-function' to
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(custom-safe-themes
-   '("c3a4d67bcbf50a50d3dfc9c0c9b57b2ee50cfe0abcd79419e99453ca743a56a8" "dee0ab432972a6744735e1d1770093828ad3eadef4b5e4048405b70d6c6ef69c" "88ca45ddc278fd5e14f1f5449b7a48098866fd21f6eb4f44f1e68765688f5aac" "7aba25b0e38b789e5357dc9b68206060293072fdc3526cb873ae23fea49b79cd" "36a7407dd4f45368abcf4619b25b3af1bc2fdd86b2d7433647d702011d90c5bc" "491b9ce0a6522f80b6a65aeaa19e59580307d2ee5ff7b435382a4caa65a5141d" "66a62497a8c8cffdc823d883b83679e231b95040b10a4b38bdd4f647867b196a" "dd260b6a42d434555c875acb5bab468e54a0cdc666350c8bfa0ed0c8ed487551" "43371217d8e10b4a20aba538c5bb743f10e4d69467b2186576ff47e7fa045ad3" "57e9df4318e6465bd881861a681726501e593da567a16ede7fe63dadb7cb648f" "913516312ab3235a580b403283d5a8835dc601eb0239b224c6c27d35dc6b4f38" "5c0148e41b983f85ab41852d4ce227b957bb7a76bfe51d55184a42e5a8ba1a48" "1f143078ac1fa82ed6808cb8a83665405fefe4e0bfba3059f61d056961bc545a" "87bfa6720edbaf5e9a4483e6c730928e1e177888bbd8ec82059ad6c4f5846383" "57a365527f69e8c5dee8493f188bb6b9796b9f1abdd969dccc4ea8f4bad231e8" "ed7e3976ccb8646522faaa940ccaa2b02d85db1b794cbcd2076fb4590d39ebff" "ea48768f2373a093db258467b7303606b80ce693354eccc87c01374ce45dba48" "09c905d801be38dcd00e69f10751c884358e1c94a5b719ebe18770c6d751ef83" "35f8dfc576d5bf1e7016a20d9ceaa31907e632984705769479bb2592d2e2cf72" "ab4bfc1cdcd6deb99ddc2be8fc0fde03047ab9a8773dded828cdb65f1187372d" "f5a7b992f55e385f30ee40998f74b598849afbbf683eb1cd8b4e6418d637e228" "2a5da04924bdd20aefd78d5093afc07d76520f87f3317c4938bb8ce8e5fcf16f" "5c327f1e2ad451afb2cc1a9d6e33ba548c23be63f9142782880c7e3c7b4a0b44" "e0ca2751f3b849d4d54056312274d5f1aa39e56d2844a1d5797743feea98faa6" "b96f9d3af74bd6b758134c0f587e1e6b39cad97f9d709d033110795cb8da0b57" "c9b17602ab7063bbbcf99f3f74800eaa6e26beaa131a374937e28d381ca259c4" "12fc489c67eb874fead9221152564fd40b1ace698d861a13bfe0683afbdb66dc" "32a3e22993c122ffc0eb716d3013b94bb86044b2536d1b63780e13283f578e11" "33724fc2ebc6972567169cbfc54139ba5f334855d7e74fd0328312ed4f97fb2f" "7bdda6056822c9a8e6d1c72ffc340568f38c54ce1813f75ef01bb69e2f80f774" "8ceaf37709be42c21b3e74597c16ad2a1866a324710b74e3f7388ce8c050d2fa" "d20f39b2c961611e9d135d8e0e92b2444141253f59520063d1119746e202f192" "0e160aa1a035935ea1d70ae8d15e22eb01d9010aa2bec13e1cff50bdc5c04332" "51a10d605e1bc9f3a7912a547d2672d5ab6457e62a00a5e3f4873e6eeee1ffac" "576817b56acd8a77a3957312a14f90b1dad6c9d5e08c0f38b37f301dd8d302c2" "442d9c6c7ab6594bd5970b2d0ab4dd8185fb9602480b309d7326f536ff145e6d" "cc8f864bf528840e09a7e10642bb738dd6edf9ca747745c4a6c1840cd79e1298" "bfae9e706314f5b9da125bf62ba68016318c1d325fd73d05e4a92c664d2da43f" "140c6b56b2ba1fb48169434a1fd8a653922be7e2957da1ffed8cfc19fb90fc43" "0862fe9bb25b1cd6e59509d3ef1c492a1bf55aca50905b9d2109036e52044140" "1617cc7ae9d6e797ef064663e71ccd8af1c7d5a67604bcc33834f25d3be5da50" "ba31dc1c26401c5d5b35de655ea9d7aee9f21527328b54b4da6280c2460f4825" "3aeea09b1181f2a5f924e68a7933920cba06adf165e775883a98749ff57bb10a" "a6b553143cd8a024a045ceeca2c533941d877c8cc16f87ed5d1acdf0c5044bac" "b2f05f6e0fa42e08069f4737e0f7dd0d663c6e3934ba7a42673d1714f7d80400" "9bfd8e0624b0e8e0ba4203901bb58c41b927f8b251272acdcf517d707b5bbc2c" "e5f768c8bf5a5dd28a8b84655b3b5e872e120a75376c669c51805b22910084ca" "5cf82b1be04e91e7024e1934a7a909c124e8e6f2f85fddfacc9724d4ad2ec9b9" "878ddd87e7ecd070bd767237178f1061b01a1eb49afe23c4358499360888339b" "92181d614e1270ac76da6439cf6a14defc9dd16454e0130c8432896632e4c91c" "e240f6d5a8ccd4b2a09518f04ca97cf195f8f337463d62e7c8baa0d5ad40d22c" "5b794603fb798c6f1d57a9c3d5991ed8dd5d0071d1a97f106be4ca772c1d61e8" "5ed24c6f7d30af9c94dfc38fc0fce8ece61e250d5ae1f666d00ef1649dc703d3" "6543614e44b95523f05a0be1e96d78468751f173625b4732d7e99cbce959e312" "0258e7050ef41bbee17959af0cfe6b4e5d2c2e49439a08770ce8f88b202487e9" "c3d13cbba1d87983ef930cda55f08f99f0abb3a4c169446f11141ed19b4af1e6" "b4de17f7a20bd9966e7752a75129df10f33b9a53319de3f1fd48c9fec9806207" "e0b2ad54031a49dd054da83287273f03536c160a2dde832f442e639122add22d" "f6686e892fc9ae1e2c6c447a7bbc4f431e9b28420689eaf01b6fba756ea5f475" "5ded9878f4a765e741f400c081ab4d8c88c78e2c0f44db5c28d4c22fb41526a6" "006a5cbca622bfa20c238c6e7f6856f052cb612381d45c0061c67d1b08b89d2d" "19fb1be04e066c498d6c674b4e61fc922c6467017ec130b5fe2f2e1646c472e9" "b611d0a5e5c71d6ce316588651f0b49c52702e98cfa95795c103fcea60a520e1" "af08c8e7732e89201fd463b3a04d1d57fecb549bf1a191195911dbe58548fb8d" "f4560d1069f889dfef0a7a2b34d6360ad1a0dd1ec80993eb56805cd06121eff5" "410201c91ed9820590f435cca51305cc83c0c900f2ff63ccd08c526e5b453d8c" "9b2818eb1152a37d9d839371473a7446b441e4360ecdd9a9a1fba72dec24c354" "1fafb9b13aadb96480014b871909a26d46c4ee9c3a57b4efea1e6a688e085451" "2b3d504022714945368ef382df8fe9c1929268f9ad49d889e30c8d5244ec8c9e" "fdfaae66c6bc93872c3e4abeb9488a926bf2fba148889a388a75d5fe81fbf44b" "d6d7f76ed646e3b4c8d11dcf004d628cee7b2900aea3c2a63474a0deaa567dd3" "564abaa9051df8d499ab08efb6830a0da279521f1bae39b4d5c99326179e651c" "2386aa5a90d6d6ae25f8c9bb3081c99bebe10622e470408e57d59e95f2902e68" "7168cb6c66db59aefaf58358d192ab8a8f60a6e50b6c2eedb239ff751cc0ed7f" default))
+   '("e8007dd686728ff3d166c3e108138c6b3c9d53242cace89056484419179bcd03" "c3a4d67bcbf50a50d3dfc9c0c9b57b2ee50cfe0abcd79419e99453ca743a56a8" "dee0ab432972a6744735e1d1770093828ad3eadef4b5e4048405b70d6c6ef69c" "88ca45ddc278fd5e14f1f5449b7a48098866fd21f6eb4f44f1e68765688f5aac" "7aba25b0e38b789e5357dc9b68206060293072fdc3526cb873ae23fea49b79cd" "36a7407dd4f45368abcf4619b25b3af1bc2fdd86b2d7433647d702011d90c5bc" "491b9ce0a6522f80b6a65aeaa19e59580307d2ee5ff7b435382a4caa65a5141d" "66a62497a8c8cffdc823d883b83679e231b95040b10a4b38bdd4f647867b196a" "dd260b6a42d434555c875acb5bab468e54a0cdc666350c8bfa0ed0c8ed487551" "43371217d8e10b4a20aba538c5bb743f10e4d69467b2186576ff47e7fa045ad3" "57e9df4318e6465bd881861a681726501e593da567a16ede7fe63dadb7cb648f" "913516312ab3235a580b403283d5a8835dc601eb0239b224c6c27d35dc6b4f38" "5c0148e41b983f85ab41852d4ce227b957bb7a76bfe51d55184a42e5a8ba1a48" "1f143078ac1fa82ed6808cb8a83665405fefe4e0bfba3059f61d056961bc545a" "87bfa6720edbaf5e9a4483e6c730928e1e177888bbd8ec82059ad6c4f5846383" "57a365527f69e8c5dee8493f188bb6b9796b9f1abdd969dccc4ea8f4bad231e8" "ed7e3976ccb8646522faaa940ccaa2b02d85db1b794cbcd2076fb4590d39ebff" "ea48768f2373a093db258467b7303606b80ce693354eccc87c01374ce45dba48" "09c905d801be38dcd00e69f10751c884358e1c94a5b719ebe18770c6d751ef83" "35f8dfc576d5bf1e7016a20d9ceaa31907e632984705769479bb2592d2e2cf72" "ab4bfc1cdcd6deb99ddc2be8fc0fde03047ab9a8773dded828cdb65f1187372d" "f5a7b992f55e385f30ee40998f74b598849afbbf683eb1cd8b4e6418d637e228" "2a5da04924bdd20aefd78d5093afc07d76520f87f3317c4938bb8ce8e5fcf16f" "5c327f1e2ad451afb2cc1a9d6e33ba548c23be63f9142782880c7e3c7b4a0b44" "e0ca2751f3b849d4d54056312274d5f1aa39e56d2844a1d5797743feea98faa6" "b96f9d3af74bd6b758134c0f587e1e6b39cad97f9d709d033110795cb8da0b57" "c9b17602ab7063bbbcf99f3f74800eaa6e26beaa131a374937e28d381ca259c4" "12fc489c67eb874fead9221152564fd40b1ace698d861a13bfe0683afbdb66dc" "32a3e22993c122ffc0eb716d3013b94bb86044b2536d1b63780e13283f578e11" "33724fc2ebc6972567169cbfc54139ba5f334855d7e74fd0328312ed4f97fb2f" "7bdda6056822c9a8e6d1c72ffc340568f38c54ce1813f75ef01bb69e2f80f774" "8ceaf37709be42c21b3e74597c16ad2a1866a324710b74e3f7388ce8c050d2fa" "d20f39b2c961611e9d135d8e0e92b2444141253f59520063d1119746e202f192" "0e160aa1a035935ea1d70ae8d15e22eb01d9010aa2bec13e1cff50bdc5c04332" "51a10d605e1bc9f3a7912a547d2672d5ab6457e62a00a5e3f4873e6eeee1ffac" "576817b56acd8a77a3957312a14f90b1dad6c9d5e08c0f38b37f301dd8d302c2" "442d9c6c7ab6594bd5970b2d0ab4dd8185fb9602480b309d7326f536ff145e6d" "cc8f864bf528840e09a7e10642bb738dd6edf9ca747745c4a6c1840cd79e1298" "bfae9e706314f5b9da125bf62ba68016318c1d325fd73d05e4a92c664d2da43f" "140c6b56b2ba1fb48169434a1fd8a653922be7e2957da1ffed8cfc19fb90fc43" "0862fe9bb25b1cd6e59509d3ef1c492a1bf55aca50905b9d2109036e52044140" "1617cc7ae9d6e797ef064663e71ccd8af1c7d5a67604bcc33834f25d3be5da50" "ba31dc1c26401c5d5b35de655ea9d7aee9f21527328b54b4da6280c2460f4825" "3aeea09b1181f2a5f924e68a7933920cba06adf165e775883a98749ff57bb10a" "a6b553143cd8a024a045ceeca2c533941d877c8cc16f87ed5d1acdf0c5044bac" "b2f05f6e0fa42e08069f4737e0f7dd0d663c6e3934ba7a42673d1714f7d80400" "9bfd8e0624b0e8e0ba4203901bb58c41b927f8b251272acdcf517d707b5bbc2c" "e5f768c8bf5a5dd28a8b84655b3b5e872e120a75376c669c51805b22910084ca" "5cf82b1be04e91e7024e1934a7a909c124e8e6f2f85fddfacc9724d4ad2ec9b9" "878ddd87e7ecd070bd767237178f1061b01a1eb49afe23c4358499360888339b" "92181d614e1270ac76da6439cf6a14defc9dd16454e0130c8432896632e4c91c" "e240f6d5a8ccd4b2a09518f04ca97cf195f8f337463d62e7c8baa0d5ad40d22c" "5b794603fb798c6f1d57a9c3d5991ed8dd5d0071d1a97f106be4ca772c1d61e8" "5ed24c6f7d30af9c94dfc38fc0fce8ece61e250d5ae1f666d00ef1649dc703d3" "6543614e44b95523f05a0be1e96d78468751f173625b4732d7e99cbce959e312" "0258e7050ef41bbee17959af0cfe6b4e5d2c2e49439a08770ce8f88b202487e9" "c3d13cbba1d87983ef930cda55f08f99f0abb3a4c169446f11141ed19b4af1e6" "b4de17f7a20bd9966e7752a75129df10f33b9a53319de3f1fd48c9fec9806207" "e0b2ad54031a49dd054da83287273f03536c160a2dde832f442e639122add22d" "f6686e892fc9ae1e2c6c447a7bbc4f431e9b28420689eaf01b6fba756ea5f475" "5ded9878f4a765e741f400c081ab4d8c88c78e2c0f44db5c28d4c22fb41526a6" "006a5cbca622bfa20c238c6e7f6856f052cb612381d45c0061c67d1b08b89d2d" "19fb1be04e066c498d6c674b4e61fc922c6467017ec130b5fe2f2e1646c472e9" "b611d0a5e5c71d6ce316588651f0b49c52702e98cfa95795c103fcea60a520e1" "af08c8e7732e89201fd463b3a04d1d57fecb549bf1a191195911dbe58548fb8d" "f4560d1069f889dfef0a7a2b34d6360ad1a0dd1ec80993eb56805cd06121eff5" "410201c91ed9820590f435cca51305cc83c0c900f2ff63ccd08c526e5b453d8c" "9b2818eb1152a37d9d839371473a7446b441e4360ecdd9a9a1fba72dec24c354" "1fafb9b13aadb96480014b871909a26d46c4ee9c3a57b4efea1e6a688e085451" "2b3d504022714945368ef382df8fe9c1929268f9ad49d889e30c8d5244ec8c9e" "fdfaae66c6bc93872c3e4abeb9488a926bf2fba148889a388a75d5fe81fbf44b" "d6d7f76ed646e3b4c8d11dcf004d628cee7b2900aea3c2a63474a0deaa567dd3" "564abaa9051df8d499ab08efb6830a0da279521f1bae39b4d5c99326179e651c" "2386aa5a90d6d6ae25f8c9bb3081c99bebe10622e470408e57d59e95f2902e68" "7168cb6c66db59aefaf58358d192ab8a8f60a6e50b6c2eedb239ff751cc0ed7f" default))
  '(debug-on-error nil)
  '(safe-local-variable-values
-   '((c-default-style . "K&R")
+   '((cider-clojure-cli-global-options . "-A:with-examples:test")
+     (c-default-style . "K&R")
      (sly-port . 4004)
      (eval let
            ((args
